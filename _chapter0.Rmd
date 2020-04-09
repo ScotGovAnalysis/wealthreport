@@ -1,0 +1,15 @@
+Personal wealth is one of the key components of people's standard of living. Wealth can be used as a source of finance to improve current or future living standards, to invest in opportunities such as education or entrepreneurial activities, and to provide financial resilience, reducing vulnerability to shocks such as unemployment or illness. Many people will try to grow their wealth throughout their working lives, in preparation for retirement, but households with low income and low starting wealth will find this more difficult. This reports sets out the current state of wealth and wealth inequality in Scotland and how this has changed over recent years.
+
+This report is published under the label "Experimental Official Statistics" as it is the first Official Statistics publication on wealth published by the Scottish Government. We invite feedback on the content and presentation of this report in order to improve future releases.
+
+## Overview
+
+The [**Total Wealth**][1. Total Wealth] section gives an overview over the amount of personal wealth present in Scotland, how wealth is made up of four different components, how the relative importance of each have changed over the years, and how Scotland's wealth compares to that of England and Wales.
+
+The [**Wealth Inequality**][2. Wealth Inequality] section describes how wealth is distributed across households in Scotland, how that has changed over time, and how it compares to how income is distributed across households. Furthermore, a range of measures describe wealth inequality in Scotland over time, and in comparison to Wales and England. And finally, different types of households are shown that have above or below average wealth.
+
+The [**Financial Wealth and Debt**][3. Financial Wealth and Debt] section describes how financial wealth is distributed across households in Scotland, how financial wealth is more unequally distributed compared to the other components of wealth. A subsection on unmanageable debt looks at those households in Scotland at the very bottom end of the financial wealth spectrum, and another subsection on financial vulnerability identifies the kind of households that might struggle in a crisis because they have little savings.
+
+The [**Property Wealth**][4. Property Wealth] section shows the distribution of property wealth for those households that have property. It then looks at households with no property wealth whatsoever, and identifies types of households that are more or less likely to have some property wealth.
+
+And finally, the [**Pension Wealth**][5. Pension Wealth] section shows how pension wealth is distributed for those people and households that have pension wealth. Pension participation is shown by age and gender. And finally, the types of households are identified that are more or less likely to have some pension wealth.

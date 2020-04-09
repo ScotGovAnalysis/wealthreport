@@ -1,0 +1,121 @@
+---
+title: "Wealth in Scotland 2006-2018"
+subtitle: "Experimental Official Statistics"
+date: "Published on 21 January 2020"
+
+# Output (html) settings
+output:
+  html_document:
+    self_contained: no
+    toc: yes
+    toc_depth: 2
+    toc_float:
+      collapsed: yes
+      smooth_scroll: no
+      
+# Set parameters
+params:
+  period: "2016-2018"
+  previousperiod: "2014-2016"
+  latest: "r6"
+  
+  # Colourbrewer 6-class BrBG and PuBuGn (for timeseries):
+  cols_six: !r c('#8c510a','#d8b365','#f6e8c3',
+                 '#c7eae5','#5ab4ac','#01665e')
+  cols_ts: !r c('#f6eff7','#d0d1e6','#a6bddb',
+                '#67a9cf','#1c9099','#016c59')
+  
+  years: !r c("2016-2018", "2014-2016", "2014-2016 (w5)", "2012-2014",   
+              "2010-2012", "2008-2010", "2006-2008")
+  years_rev: !r c("2006-2008", "2008-2010", "2010-2012", "2012-2014",
+                  "2014-2016 (w5)", "2014-2016", "2016-2018")
+  regions: !r c("Scotland", "England", "Wales", "Great Britain")
+  types: !r c("Financial", "Physical", "Property", "Pension", "Total")
+  decs: !r c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "All")
+  ages: !r c("16-24", "16-34", "25-34", "35-44", "45-54", "55-64", "65-74", "75+")
+  source: "Source: Wealth and Assets Survey"
+  inflation: "Amounts are adjusted for inflation and are in 2016-2018 prices"
+  wrap: !r c(65, 75, 52, 62)
+---
+
+<!-- Include logo at the top of the document -->
+
+<script>
+  $(document).ready(function(){
+    $head = $('#header');
+    $head.prepend('<a href=\"https://www.gov.scot\"><img src=\"sglogo.png\" style=\"float: right; height: 38px;\"  alt=\"Scottish Government logo\"/></a>')
+  });
+</script>
+
+
+```{r setup, include = FALSE}
+
+knitr::opts_chunk$set(echo = FALSE, message = TRUE)
+
+# Load some R packages ----
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(scales)
+library(haven)
+library(treemap)
+library(labelled)
+library(ggiraph)
+library(sessioninfo)
+
+# Save session info ----
+p <- session_info()
+
+session_platform <- map_dfr(p$platform, pluck)
+session_packages <- p$packages
+
+write_excel_csv(session_platform, "_session_platform.csv")
+write_excel_csv(session_packages, "_session_packages.csv")
+
+
+# Define main theme for charts ----
+mytheme <- theme_grey() + 
+  theme(text = element_text(colour = "grey20", size = 12 ), 
+        
+        line = element_line(colour = "white", 
+                            linetype = 1, 
+                            lineend = 2, 
+                            size = 0.5), 
+        
+        plot.title = element_text(hjust = 0, colour = 'black'), 
+        plot.subtitle = element_text(hjust = 0, colour = 'black'), 
+        plot.caption = element_text(hjust = 1, colour = 'black'), 
+
+        legend.position = "top", 
+        legend.title = element_blank(), 
+        
+        panel.background = element_rect(fill = "grey90"), 
+        panel.grid.major.x = element_blank(), 
+        panel.grid.minor.x = element_blank(), 
+        
+        axis.ticks = element_blank(), 
+        axis.line = element_blank(), 
+        axis.title = element_blank()) 
+  
+theme_set(mytheme)
+
+```
+
+```{r child = "_chapter0.Rmd"}
+```
+```{r child = "_chapter1.Rmd"}
+```
+```{r child = "_chapter2.Rmd"}
+```
+
+```{r child = "_chapter3.Rmd"}
+```
+```{r child = "_chapter4.Rmd"}
+```
+```{r child = "_chapter5.Rmd"}
+```
+```{r child = "_chapter6.Rmd"}
+```
+
+
+

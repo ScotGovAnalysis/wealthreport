@@ -1,0 +1,1167 @@
+# 2. Wealth Inequality
+
+```{r, ch2_setup, include = FALSE}
+
+# Import SAS datasets ----
+
+incdist <- read_sas("SAS datasets/incdist.sas7bdat")
+mediantot <- read_sas("SAS datasets/mediantot.sas7bdat")
+inequType <- read_sas("SAS datasets/inequType.sas7bdat")
+inequ <- read_sas("SAS datasets/inequ.sas7bdat")
+allgroups <- read_sas("SAS datasets/allgroups.sas7bdat")
+
+# Set chart theme ----
+
+theme_set(mytheme)
+
+# Function: simplify ggiraph syntax ----
+
+makeggiraph <- function(p, width = 1, width_svg = 7){
+  
+  require("ggiraph")
+  
+  ggiraph({print(p)}, width = width, width_svg = width_svg)
+}
+
+# Function: add titles and source (caption) to charts ----
+
+addtitles <- function(t = title, 
+                      s = subtitle,
+                      c = params$source,
+                      twrap = titlewrap){
+  require("ggplot2")
+  
+  labs(title = str_wrap(t, twrap), 
+       subtitle = str_wrap(s, twrap*1.1), 
+       caption = c)  
+}
+
+# Function: filter inequ dataset for Scotland and sort by year ----
+
+filterinequ <- function(df){
+  
+  filter(df,
+         region == "Scotland",
+         years != "2014-2016 (w5)") %>%
+  mutate(years = ordered(years)) %>%
+  arrange(years)  
+}
+
+# Function: make Gini (and others) timeseries chart ----
+
+makeGinichart <- function(type, 
+                          low, 
+                          high, 
+                          formatfn = comma_format(accuracy = 1)){
+ 
+  require("ggplot2")
+  
+  s <- ggplot(data, aes(x = years, 
+                      y = data[[type]], 
+                      fill = years,
+                      size = years,
+                      tooltip = tooltip,
+                      data_id = tooltip)) +
+  
+  geom_point_interactive(shape = 21,
+             colour = params$cols_six[6],
+             show.legend = FALSE) +
+  
+  scale_y_continuous(limits = c(low, high), 
+                     labels = formatfn) +
+  
+  scale_fill_manual(values = params$cols_ts) +
+  
+  addtitles() 
+
+  makeggiraph(s)
+}
+
+# Function: tidy up inequ dataset for GB iequ analysis ----
+
+GBmanipinequ <- function(data){
+  
+  data %>%
+  filter(years != "2014-2016 (w5)",
+         region != "Great Britain") %>%
+  select(region, years, Gini, Palma, mean2median, 
+         bot40:top10, absPalma, nowealth) %>%
+  mutate(region = factor(region, levels = params$regions), 
+         years = ordered(years, levels = params$years_rev)) %>%
+  arrange(years)
+  
+}
+# Function: make Gini (and others) GB timeseries chart ----
+
+makeGinichartGB <- function(type, low, high, 
+                            formatfn = comma_format(accuracy = 1)){
+
+  require("ggplot2")
+  
+  t <- ggplot(data, aes(x = years,
+                      y  = data[[type]],
+                      fill = years,
+                      size = years,
+                      tooltip = tooltip,
+                      data_id = tooltip)) +
+  
+  geom_point_interactive(shape = 21, 
+                         colour = params$cols_six[6]) +
+  
+  scale_y_continuous(limits = c(low, high),
+                     labels = formatfn) +
+  
+  scale_fill_manual(values = params$cols_ts) +
+  
+  theme(axis.text.x = element_blank()) +
+  
+  facet_grid(cols = vars(region)) +
+  
+  addtitles() 
+
+makeggiraph(t)
+
+}
+# Function: make median wealth by hhld type chart ----
+
+makemedianwealthchart <- function(data, 
+                                  nudgelabel = 75000, 
+                                  nudgeaverage = 20000){
+   r <- ggplot(data, 
+              aes(x = group, 
+                  weight = medtot,
+                  tooltip = stringi::stri_escape_unicode(tooltip),
+                  data_id = tooltip)) + 
+     
+    geom_bar_interactive(fill = params$cols_six[6]) +
+  
+    geom_hline(yintercept = data$average[1], 
+               alpha = 0.4, 
+               colour = params$cols_six[6], 
+               size = 2) +
+  
+    geom_label(aes(y = medtot, label = comma(medtot, prefix = "£")),
+               nudge_y = nudgelabel, 
+               fill=NA, 
+               alpha = 0.5,
+               colour = "grey20") +
+  
+    geom_text(data = data[1, ],
+              mapping = aes(x = group, 
+                            y = average,
+                            label = comma(average, 
+                                          prefix = "Average: £")),
+              nudge_y = nudgeaverage,
+              nudge_x = -0.2,
+              hjust = 0,
+              colour = params$cols_six[6]) +
+  
+    scale_y_continuous(limits = c(0, 800000),
+                       labels = comma_format(prefix = "£")) +
+  
+    coord_flip() + 
+    
+    addtitles() +
+  
+    theme(panel.grid.major.x = element_line(colour = "white"),
+      panel.grid.minor.x = element_line(colour = "white"), 
+      panel.grid.major.y = element_blank() )
+
+}
+
+```
+
+Wealth inequality in Scotland is monitored within Scotland's National Performance Framework^[Scotland's National Performance Framework: [https://nationalperformance.gov.scot/measuring-progress/national-indicator-performance](https://nationalperformance.gov.scot/measuring-progress/national-indicator-performance)]. This section shows how wealth is distributed across the population, and how much more the wealthiest households have compared to the least wealthy. Using a range of summary measures, we look at how wealth inequality differs for the four different components of total wealth, how overall wealth inequality has changed over the years, and compare Scotland to England and Wales. And finally, we look at the types of households in Scotland that typically have more or less wealth than the average.
+
+### Income and wealth  {.tabset .tabset-fade}
+
+Discussion on inequality often focuses on how unequally income is distributed, but wealth is even more unequally distributed than income. 
+
+The chart below splits Scotland's population into fifty equal-sized groups, which are sorted by income and wealth on the horizontal axis, with each bar representing 2% of the population. Lower income / less wealthy households are on the left, and richer / wealthier households are on the right. The height of the bars shows each group's share of total income / wealth. 
+
+The 2% top income households in Scotland had 9% of all income, but the wealthiest 2% of all households in Scotland had 15% of all wealth. On the other end, the bottom 20% households had 8% of all income, and only 1% of all wealth.
+
+#### Income and wealth
+
+```{r}
+
+# Titles ----
+
+title <- "Wealth is more unequally distributed than income"
+subtitle <- str_c("Share of total wealth* in each 2% wealth band, and share of total household income in each 2% income band, Scotland ", params$period)
+titlewrap <- 75
+
+topleft <- "The least wealthy households have almost no share of total wealth."
+topright <- "The wealthiest households have very large shares of total wealth."
+bottomright <- "Top-income households have fairly large shares of total income."
+bottomleft <- "Low income households have a small share of total income."
+
+
+# Data ----
+
+data <- incdist %>%
+  filter(!is.na(pctile)) %>%
+  remove_labels() %>%
+  gather(wlthShare, incShare, key = "Type", value = "Share") %>%
+  mutate(measure = ifelse(Type == "wlthShare", 
+                          "Wealth share: ", 
+                          "Income share: "),
+         tooltip = str_c(measure, 
+                    percent(Share, accuracy = 0.1), 
+                    " at percentiles ", pctile-1,
+                    " to ",
+                    pctile))
+
+# Chart ----
+
+p <- ggplot(data, aes(x = pctile, 
+                      y = Share,
+                      tooltip = tooltip,
+                      data_id = tooltip)) + 
+  
+  geom_bar_interactive(aes(fill = Type), 
+           position = 'dodge', 
+           stat = 'identity', 
+           colour = 'white') +   
+  
+  scale_fill_manual(values = params$cols_six[c(2,6)], 
+                      labels = c("Income", "Wealth")) +
+  
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  
+  scale_x_continuous(breaks = c(0, 20, 40, 60, 80, 100)) +
+  
+  theme(axis.title.x = element_text(hjust = 0.5, colour = "grey20") ) +
+  
+  labs(x = "Wealth percentile / income percentile") +
+  
+  addtitles(c = str_c(params$source, ", Family Resources Survey")) +
+  
+  annotate("text", 
+           x = 0, 
+           y = 0.03, 
+           label = "*Negative wealth is set to £0", 
+           hjust = 0, 
+           colour = "grey20", 
+           size = 3) +
+  
+  annotate("text",
+           x = 60,
+           y = 0.14,
+           label = str_wrap(topright, 25),
+           hjust = 0,
+           vjust = 1,
+           colour = params$cols_six[6],
+           size = 4) +
+  
+  annotate("text",
+           x = 60,
+           y = 0.09,
+           label = str_wrap(bottomright, 25),
+           hjust = 0,
+           vjust = 1,
+           colour = params$cols_six[1],
+           size = 4) +
+  
+  annotate("text",
+           x = 0,
+           y = 0.14,
+           label = str_wrap(topleft, 25),
+           hjust = 0,
+           vjust = 1,
+           colour = params$cols_six[6],
+           size = 4) +
+  
+  annotate("text",
+           x = 0,
+           y = 0.09,
+           label = str_wrap(bottomleft, 25),
+           hjust = 0,
+           vjust = 1,
+           colour = params$cols_six[1],
+           size = 4) 
+
+makeggiraph(p)
+
+```
+
+#### Table
+
+```{r}
+
+# Titles ----
+
+title <- str_c("Table 2.1 Relative share of total wealth and of total income by 2% band, Scotland ", params$period)
+
+footnote <- c("Income is disposable net household income and based on the financial years 2016/17 and 2017/18.", "Negative values of total wealth were set to 0 when producing this table.")
+
+# Data ----
+
+data <- incdist
+data$pctile[which (is.na(data$pctile))] <- "All"
+
+data <- data[c(seq(2, 51), 1), ]
+
+data$incShare <- percent(data$incShare, accuracy = 0.1)
+data$wlthShare <- percent(data$wlthShare, accuracy = 0.1)
+
+# Table ----
+
+kable(data, 
+      col.names = c("Percentile", "Wealth share", "Income share"), 
+      caption = title,
+      align = c("l", "r", "r", "r", "r", "r", "r")) %>%
+  
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive", "condensed"), full_width = F, position = "left") %>%
+  
+  footnote(alphabet = c(str_c(params$source, ", Family Resources Survey"), footnote) )
+
+```
+
+## 2.1 Wealth distribution {.tabset .tabset-fade}
+
+The wealth distribution chart below splits all households in Scotland into ten equal-sized groups (called deciles), sorted by household wealth, from the least wealthy on the left, to the wealthiest on the right. The chart shows the wealth of a typical household in each decile group, or the decile medians.
+
+```{r}
+
+data <- mediantot %>%
+  filter(Years == max(Years)) %>%
+  select(median, totdec)
+
+median10 <- data %>%
+  filter(totdec == 10) %>%
+  select(median) %>%
+  mutate(median = comma(median, accuracy = 0.1, scale = 1E-6, prefix = "£", suffix = " million"))
+
+median10 <- median10[[1]]
+
+median1 <- data %>%
+  filter(totdec == 1) %>%
+  select(median) %>%
+  mutate(median = comma(median, accuracy = 100, prefix = "£"))
+
+median1 <- median1[[1]]
+
+```
+
+A typical household in the top decile of the household population had `r median10`, whereas a typical household in the bottom decile had `r median1` in total wealth. 
+
+Note that the least wealthy households are unlikely to own property or have any pension savings. Most of their wealth is also not cash or savings, but rather physical wealth, the value of people's possessions such as clothing or furniture.
+
+### Median wealth
+
+```{r}
+
+# Titles ----
+
+title <- str_c("The wealthiest households had on average ", median10, " in total wealth and the least wealthy ", median1)
+subtitle <- str_c("Median wealth by wealth decile, Scotland ", params$period)
+titlewrap <- 68
+
+# Data ----
+
+data <- mediantot %>%
+  mutate(totdec = factor(totdec),
+         tooltip = str_c("Median wealth for wealth decile ", 
+                         totdec, 
+                         ": ", 
+                         comma(median, prefix = "£"))) %>%
+  filter(Years == params$period,
+         !is.na(totdec))
+
+# Chart ----
+  
+p <- ggplot(data, 
+            aes(totdec, 
+                median,
+                label = comma(median, prefix = "£"),
+                tooltip = stringi::stri_escape_unicode(tooltip),
+                data_id = tooltip)) + 
+  
+  geom_bar_interactive(stat = 'identity', 
+                       colour = "white",
+                       fill = params$cols_six[6]) +   
+  
+  geom_label(data = data[10, ],
+             mapping = aes(x = totdec,
+                           y = median,
+                           label = median10), 
+             nudge_y = 1.5E5,
+             nudge_x = -0.2,
+             fill=NA, 
+             alpha = 0.5,
+             colour = "grey20") +
+  
+  geom_label(data = data[1, ],
+             mapping = aes(x = totdec, 
+                           y = median, 
+                           label = median1), 
+             nudge_y = 1.5E5,
+             fill=NA, 
+             alpha = 0.5,
+             colour = "grey20") +
+  
+  scale_y_continuous(limits = c(0, 2E6),
+                     labels = comma_format(scale = 1E-6, 
+                                           prefix = "£", 
+                                           suffix = " million", 
+                                           accuracy = 0.1)) +
+  
+  labs(x = "Total wealth decile") +
+  
+  theme(axis.title.x = element_text(hjust = 0.5, colour = "grey20")) +
+  
+  addtitles()
+  
+makeggiraph(p)
+
+```
+
+
+### Table
+
+```{r}
+
+# Titles ----
+
+title <- str_c("Table 2.2 Median total wealth by wealth decile, Scotland ", params$period)
+
+# Data ----
+
+data <- mediantot %>%
+  mutate(totdec = ifelse(is.na(totdec), "All", totdec),
+         totdec = factor(totdec, levels = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, "All")),
+         median = comma(median, prefix = "£")) %>%
+  filter(Years == params$period) %>%
+  select(totdec, median) %>%
+  arrange(totdec)
+
+# Table ----
+
+kable(data, 
+      col.names = c("Wealth decile", "Median wealth"), 
+      caption = title,
+      align = c("l", "r")) %>%
+  
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive", "condensed"), full_width = F, position = "left") %>%
+  
+  footnote(alphabet = c(params$source)) 
+
+```
+
+## 2.2 Wealth inequality by wealth type
+
+While wealth distributions like the one above give a detailed picture of inequality at one point in time, **summary measures** of wealth inequality can track change over time and compare different regions, or compare inequality for different types of wealth. The following sections include a range of summary measures, which describe slightly different shades of inequality.
+
+The table below shows how the extent of inequality differs for the four different components of wealth. For all of these measures, a larger value corresponds to a higher level of inequality.
+
+Financial wealth is the most unequally distributed type of wealth. It has the highest Gini coefficient among all types of wealth. The mean-to-median ratio, which shows how skewed the wealth distribution is towards higher wealth, is largest for financial wealth. And the share of wealth that is held by the 10% wealthiest households is also largest for financial wealth.
+
+```{r}
+
+# Titles ----
+
+title <- str_c("Table 2.3 Wealth inequality measures by type of wealth, Scotland ", params$period)
+
+footnote <- c("Gini: Gini coefficient of wealth inequality",
+              "No wealth: The proportion of households with no (or negative) wealth")
+
+# Data ----
+
+data <- inequType %>%
+  mutate(type = factor(type, levels = c("fin", "phy", "pro", "pen", "tot")),
+         top10 = percent(top10, accuracy = 1),
+         nowealth = percent(nowealth, accuracy = 1)) %>%
+  arrange(type) %>%
+  mutate(type2 = params$types) %>%
+  select(type2, Gini, mean2median, top10, nowealth)
+
+# Table ----
+
+kable(data,
+      col.names = c("Wealth type", "Gini", "Mean-to-median ratio", 
+                    "Share of top 10%", "No wealth"),
+      align = c("l", "r","r","r","r"),
+      caption = title) %>%
+  
+  kable_styling(bootstrap_options = c("striped", 
+                                      "hover", 
+                                      "responsive", 
+                                      "condensed")) %>%
+  footnote(alphabet = c(params$source, footnote) )
+
+```
+
+## 2.3 Wealth inequality over time {.tabset .tabset-fade}
+
+Based on most (but not all) summary measures, wealth inequality in Scotland has been either largely stable or fluctuating without a clear trend since 2010-2012. The only exception was the absolute (inflation-adjusted) wealth gap between the wealthiest 10% and the least wealthy 40%, which has widened, showing an increase in inequality. This suggests that relative wealth inequality is largely stable, but because wealth is growing, the absolute gap between the wealthiest and the least wealthy is increasing.
+
+Previously, between 2006-2008 (when measurement started) and 2010-2012, wealth inequality had decreased, or in case of the absolute wealth gap, stalled. It appears that this previous decrease happened because what wealth share the 10% wealthiest households lost, medium-wealth households gained, with little change for the least wealthy.
+
+***
+
+**Note that small differences in these estimates may not be meaningful and should be interpreted with care. This is because the estimates are based on a sample survey and could be slightly higher or lower if we interviewed a different sample of the population.**
+
+### Gini
+
+```{r}
+
+# Titles ----
+  
+title <- "Wealth inequality now fluctuating with no clear trend after a previous slow decrease"
+subtitle <- "Gini coefficient of wealth inequality, Scotland"
+titlewrap <- 70
+
+# Data ----
+
+data <- filterinequ(inequ) %>%
+  mutate(tooltip = str_c("Gini coefficient (", years, "): ", Gini))
+
+# Chart ----
+
+makeGinichart("Gini", 55, 70)
+
+```
+
+### Palma
+
+```{r}
+
+# Titles ----
+
+title <- "Wealth inequality now fluctuating with no clear trend after a previous slow decrease"
+subtitle <- "Palma ratio of wealth inequality, Scotland"
+titlewrap <- 70
+
+# Data ----
+
+data <- filterinequ(inequ) %>%
+  mutate(tooltip = str_c("Palma ratio (", years, "): ", Palma))
+
+# Chart ----
+  
+makeGinichart("Palma", 5, 15)
+
+```
+
+### Mean-to-median
+
+```{r}
+
+# Titles ----
+
+title <- "Wealth inequality fluctuating with no clear trend after a previous slow decrease"
+subtitle <- "Mean-to-median ratio of total wealth, Scotland"
+titlewrap = 70
+
+# Data ----
+
+data <- filterinequ(inequ) %>%
+  mutate(tooltip = str_c("Mean-to-median ratio (", 
+                         years, 
+                         "): ", 
+                         comma(mean2median, accuracy = 0.01)))
+
+# Chart ----
+
+makeGinichart("mean2median", 1.5, 2.5, formatfn = comma_format(accuracy = 0.1)) 
+
+```
+
+
+### Wealth shares
+
+```{r}
+
+# Titles ----
+
+title <- "Wealth shift from the top to the middle now stalling"
+subtitle <- "Wealth share of the wealthiest 10%, the middle 50%, and the bottom 40%, Scotland"
+sasdata <- read_sas("SAS datasets/inequ.sas7bdat")
+titlewrap <- 70
+
+# Data ----
+
+data <- filterinequ(inequ) %>%
+  select(years, bot40, mid50, top10) %>% 
+  remove_labels() %>%
+  gather(type, value, -years) %>%
+  mutate(tooltip = str_c("Share (", 
+                         years, 
+                         "): ", 
+                         percent(value, accuracy = 1)))
+
+# Chart ----
+
+p <- ggplot(data, aes(x = years, 
+                      y = value, 
+                      fill = type,
+                      tooltip = tooltip,
+                      data_id = percent(value, 1))) +
+  
+  geom_bar_interactive(stat = 'identity',
+                       position = 'dodge', 
+                       colour = 'white') +
+
+  scale_fill_manual(values = params$cols_six[c(2,5,6)], 
+                    labels = c("Bottom 40%", "Middle 50%", "Top 10%")) +
+
+  scale_y_continuous(limits = c(0, 0.6),
+                     labels = percent_format(accuracy = 1)) +
+  
+addtitles()
+
+makeggiraph(p)
+
+```
+
+### No wealth
+
+```{r}
+# Titles ----
+
+title <- "Fewer households have no wealth at all"
+subtitle <- "Proportion of households with no (or negative) wealth, Scotland"
+titlewrap <- 70
+
+# Data ----
+
+data <- filterinequ(inequ) %>%
+  mutate(tooltip = str_c("No wealth (", 
+                         years, 
+                         "): ", 
+                         percent(nowealth, accuracy = 1)))
+# Chart ----
+  
+makeGinichart("nowealth", 0, 0.06, formatfn = percent_format(accuracy = 1))
+
+```
+
+### Wealth gap
+
+```{r}
+
+# Titles ----
+
+title <- "Absolute wealth gap is increasing again after a previous stable period"
+subtitle <- "Absolute difference in median wealth of the top 10% and the bottom 40%, Scotland (inflation-adjusted)"
+titlewrap <- 68
+
+# Data ----
+
+data <- filterinequ(inequ) %>%
+  mutate(tooltip = str_c("Gap (", 
+                         years, 
+                         "): ", 
+                         stringi::stri_escape_unicode(comma(absPalma, 
+                                 scale = 1E-6, 
+                                 prefix = "£", 
+                                 suffix = " million", 
+                                 accuracy = 0.01))))
+# Chart ----
+
+makeGinichart("absPalma", 5E5, 2E6, 
+              formatfn = comma_format(scale = 1E-6,
+                                      prefix = "£",
+                                      suffix = " million",
+                                      accuracy = 0.1))
+
+```
+
+### Table
+
+```{r}
+
+# Titles ----
+
+title <- "Table 2.4 Wealth inequality measures, Scotland"
+footnotes <- c(params$source, 
+               "Gini: Gini coefficient of total wealth inequality", 
+               "Palma: Palma ratio - the ratio of total wealth of the top 10% and the bottom 40%", 
+               "Wealth gap: The difference in median wealth of the top 10% and the bottom 40% (also called 'absolute Palma ratio'), inflation-adjusted", 
+               "No wealth: The proportion of households with no (or negative) wealth" )
+
+# Data ----
+
+data <- filterinequ(inequ) %>%
+  mutate(bot40 = percent(bot40, 1),
+         mid50 = percent(mid50, 1),
+         top10 = percent(top10, 1),
+         nowealth = percent(nowealth, 1),
+         absPalma = comma(absPalma, 100, prefix = "£"),
+         mean2median = comma(mean2median, accuracy = 0.01),
+         years = factor(years, levels = params$years)) %>%
+  arrange(years) %>%
+  select(years, Gini, Palma, mean2median, bot40, mid50, top10, absPalma, nowealth)
+
+# Table ----
+
+kable(data, 
+      col.names = c("Period", "Gini", "Palma", "Mean-to-median ratio", "bottom 40%", "mid 50%", "top 10%", "Wealth gap", "No wealth" ), 
+      caption = title,
+      align = c("l", "r", "r", "r", "r", "r", "r")) %>%
+  
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive", "condensed"), full_width = F) %>%
+  
+  add_header_above(c(" " = 4, "Share of..." = 3, " " = 2)) %>%
+  footnote(alphabet = footnotes)
+
+```
+
+## 2.4 Scotland, Wales and England {.tabset .tabset-fade}
+
+In the charts below, we compare Scotland with England and Wales. Overall wealth inequality is broadly similar in Scotland, Wales and England, with Wales only slightly less unequal than Scotland and England on most measures.
+
+***
+
+**Note that small differences in these estimates may not be meaningful and should be interpreted with care. This is because the estimates are based on a sample survey and could be slightly higher or lower if we interviewed a different sample of the population.**
+
+### Gini
+
+```{r}
+
+# Titles ----
+
+title <- "While Wales had historically the lowest wealth inequality in Great Britain, this difference has decreased"
+subtitle <- "Gini coefficient of total wealth inequality"
+titlewrap <- 70
+
+# Data ----
+
+data <- GBmanipinequ(inequ) %>%
+  mutate(tooltip = str_c("Gini coefficient (", years, "): ", Gini))
+
+# Chart ----
+
+makeGinichartGB("Gini", 50, 70)
+
+```
+
+### Palma
+
+```{r}
+
+# Titles ----
+
+title <- "While Wales had historically the lowest wealth inequality in Great Britain, this difference has decreased"
+subtitle <- "Palma ratio of total wealth inequality"
+titlewrap <- 70
+
+# Data ----
+
+data <- GBmanipinequ(inequ) %>%
+  mutate(tooltip = str_c("Palma ratio (", years, "): ", Palma))
+
+# Chart ----
+
+makeGinichartGB("Palma", 0, 20)
+
+```
+
+### Mean-to-median
+
+```{r}
+
+# Title ----
+
+title <- "Wealth inequality now slightly lower in Scotland and Wales compared to England"
+subtitle <- "Mean-to-median ratio of total wealth"
+titlewrap <- 70
+
+# Data ----
+
+data <- GBmanipinequ(inequ) %>%
+  mutate(tooltip = str_c("Mean-to-median ratio (", 
+                         years, 
+                         "): ", 
+                         comma(mean2median, accuracy = 0.01)))
+# Chart ----
+
+makeGinichartGB("mean2median", 1, 2.5, 
+                formatfn = comma_format(accuracy = 0.1))
+
+```
+
+### Wealth shares
+
+```{r}
+
+# Titles ----
+
+title <- "In Scotland and Wales, wealth of the top 10% shifted to the middle over recent years"
+subtitle <- str_c("Wealth share of the wealthiest 10%, the middle 50%, and the bottom 40% from ", params$years[7], " to ", params$years[1])
+titlewrap <- 70
+
+# Data ----
+
+data <- GBmanipinequ(inequ) %>%
+  select(region, years, bot40, mid50, top10) %>% 
+  remove_labels() %>%
+  gather(type, value, -years, -region) %>%
+  mutate(years = ordered(years, levels = params$years_rev),
+         region = factor(region, levels = params$regions),
+         typename = ifelse(type == "bot40", 
+                           "bottom 40%", 
+                           ifelse(type == "mid50", 
+                                  "mid 50%", 
+                                  "top 10%")),
+         tooltip = str_c("Share of ",
+                         typename,
+                         " (",
+                         years,
+                         "): ",
+                         percent(value, 1))) %>%
+  arrange(years, region, type)
+
+# Chart ----
+
+p <- ggplot(data, aes(x = years, 
+                      y = value,
+                      fill = type,
+                      size = years,
+                      tooltip = tooltip,
+                      data_id = value)) +
+  
+  geom_point_interactive(colour = "white",
+                         shape = 21) +
+  
+  scale_y_continuous(limits = c(0, 0.6), 
+                     labels = percent_format(accuracy = 1)) +
+  
+  scale_fill_manual(values = params$cols_six[c(2,5,6)],
+                    labels = c("Bottom 40%", "Middle 50%", "Top 10%")) +
+  
+  guides(fill = guide_legend(override.aes = list(size = 5)),
+         size = 'none') +
+  
+  theme(axis.text.x = element_blank()) +
+  
+  facet_grid(cols = vars(region)) +
+  
+addtitles()
+
+makeggiraph(p)
+
+```
+
+### Wealth gap
+
+```{r}
+
+# Titles ----
+
+title <- title <- "Absolute wealth inequality slowly increasing in all regions and highest in England"
+subtitle <- "Difference in median wealth of the top 10% and the bottom 40%"
+titlewrap <- 70
+
+# Data ----
+
+data <- GBmanipinequ(inequ) %>%
+  mutate(tooltip = str_c("Gap (", 
+                         years, 
+                         "): ", 
+                         stringi::stri_escape_unicode(comma(absPalma, 
+                                 scale = 1E-6, 
+                                 prefix = "£", 
+                                 suffix = " million", 
+                                 accuracy = 0.01))))
+# Chart ----
+
+makeGinichartGB("absPalma", 0, 3E6, 
+                formatfn = comma_format(prefix = "£",
+                                           suffix = " million",
+                                           scale = 1E-6,
+                                           accuracy = 1 ))
+```
+
+
+### Table
+
+```{r}
+
+# Titles ----
+
+title <- "Table 2.5 Wealth inequality measures, total wealth"
+footnotes <- c(params$source, 
+               "Gini: Gini coefficient of total wealth inequality", 
+               "Palma: Palma ratio - the ratio of total wealth of the top 10% and the bottom 40%", 
+               "Wealth gap: The difference in median wealth of the top 10% and the bottom 40% (also called 'absolute Palma ratio'), inflation-adjusted", 
+               "No wealth: The proportion of households with no (or negative) wealth" )
+names <- c("Period", "Gini", "Palma", "Mean to median ratio", "bottom 40%", "mid 50%", "top 10%", "Wealth gap", "No wealth" )
+
+# Data ----
+
+data <- inequ %>%
+  filter(years != "2014-2016 (w5)") %>%
+  select(region, years, Gini, Palma, mean2median, 
+         bot40:top10, absPalma, nowealth) %>%
+
+  mutate(bot40 = percent(bot40, accuracy = 1), 
+         mid50 = percent(mid50, accuracy = 1), 
+         top10 = percent(top10, accuracy = 1),
+         mean2median = comma(mean2median, accuracy = 0.01),
+         nowealth = percent(nowealth, accuracy = 1), 
+         absPalma = str_c("£", comma(absPalma, accuracy = 100)), 
+         region = factor(region, levels = params$regions), 
+         years = ordered(years, levels = params$years)) %>%
+  arrange(region, years) %>%
+  select(years:nowealth)
+
+# Table ----
+
+kable(data, col.names = names, caption = title,
+      align = c("l", "r", "r", "r", "r", "r", "r")) %>%
+  
+  kable_styling(bootstrap_options = c("striped", "hover", 
+                                      "responsive", "condensed"), 
+                full_width = F) %>%
+  
+  add_header_above(c(" " = 4, "Share of..." = 3, " " = 2)) %>%
+  pack_rows("Scotland", 1, 6) %>%
+  pack_rows("England", 7, 12) %>%
+  pack_rows("Wales", 13, 18) %>%
+  pack_rows("Great Britain", 19, 24) %>%
+  footnote(alphabet = footnotes )
+
+```
+
+
+## 2.5 Who are the wealthiest and least wealthy households {.tabset .tabset-fade}
+
+Some people are more likely to be wealthy than others - for example, many people nearing retirement will have accumulated a considerable amount of wealth over their working lives, and are getting ready to use it up, whereas many young people are only starting to build wealth. 
+
+While this accumulation of wealth over time and with age is natural, some groups of the population are excluded from this process, as they don't have any income to spare for saving up, or they cannot afford to get on the property ladder, or they are not enrolled in any private pension scheme.
+
+The charts below show the total wealth of a typical household (median wealth) for a wide range of household characteristics, comparing each group with the Scotland average. Examples of households with above average wealth are pensioner couples, married couples, home owners, or households with degree-level qualifications. Examples of households with below average wealth are lone parent households, households in social rented housing, or households where the household reference person^[The household reference person (HRP) is the person that is the sole or joint householder or is responsible for household affairs. Where there are joint householders, the HRP will be the person with the highest income. In cases where income is the same for a joint householder, the eldest person is assigned as the HRP.] is unemployed or economically inactive (but not retired).
+
+***
+
+**Note that small differences in median wealth between different household types may not be meaningful and should be interpreted with care. This is because these estimates are based on a sample survey and could be slightly higher or lower if we interviewed a different sample of the population.**
+
+### Household type
+
+```{r}
+
+# Titles ----
+
+title <- "Pensioner couples wealthiest on average, lone parents the least wealthy."
+subtitle <- str_c("Median household wealth by household type, Scotland ", params$period)
+titlewrap <- 60
+
+# Data ----
+
+medianwealthdata <- allgroups %>%
+  select(type, group, medtot, sample) %>%
+  mutate(average = medtot[group == "All"][1],
+         group = str_wrap(group, 25),
+         tooltip = str_c(group, ": ", comma(medtot, prefix = "£"))) %>%
+  filter(group != "All") %>%
+  arrange(medtot)
+
+sex <- filter(medianwealthdata, type == "sex") %>%
+  select(group, medtot, average, sample, tooltip) %>%
+  mutate(group = factor(group), 
+         group = fct_reorder(group, medtot)) 
+
+# Chart ----
+
+p <- makemedianwealthchart(sex, nudgelabel = 7.5E4, nudgeaverage = 3E4)
+
+makeggiraph(p)
+
+```
+
+### Marital status
+
+```{r}
+
+# Titles ----
+
+title <- "Married couples wealthiest on average, singles least wealthy."
+subtitle <- str_c("Median household wealth by marital status of the household reference person, Scotland ", params$period)
+
+# Data ----
+
+mar <- filter(medianwealthdata, type == "mar") %>%
+  select(group, medtot, average, sample, tooltip) %>%
+  mutate(group = factor(group), 
+         group = fct_reorder(group, medtot)) 
+
+# Chart ----
+
+p <- makemedianwealthchart(mar)
+makeggiraph(p)
+
+```
+
+### Age
+
+```{r}
+
+# Titles ----
+
+title <- "Average wealth grows with age up to pension age when it decreases again."
+subtitle <- str_c("Median household wealth by age of the household reference person, Scotland ", params$period)
+
+# Data ----
+
+age <- filter(medianwealthdata, type == "age") %>%
+  select(group, medtot, average, sample, tooltip) %>%
+  arrange(group) %>%
+  mutate(group = factor(group), 
+         group = fct_rev(group))
+
+# Chart ----
+
+p <- makemedianwealthchart(age, nudgelabel = 6E4, nudgeaverage = 2E5)
+makeggiraph(p)
+
+```
+
+### Disability
+
+```{r}
+
+# Titles ----
+
+title <- "Households with no disabled household members have above average wealth, whereas those with disabled members have below average wealth."
+subtitle <- str_c("Median household wealth by whether someone in the household is disabled, Scotland ", params$period)
+
+# Data ----
+
+dis <- filter(medianwealthdata, type == "dis") %>%
+  select(group, medtot, average, sample, tooltip) %>%
+  mutate(group = factor(group), 
+         group = fct_reorder(group, medtot)) 
+
+# Chart ----
+
+makemedianwealthchart(dis, nudgelabel = 6E4, nudgeaverage = 8E4)
+
+```
+
+### Tenure
+
+```{r}
+
+# Titles ----
+
+title <- "Home owners have above average wealth, renters below."
+subtitle <- str_c("Median household wealth by housing tenure, Scotland ", params$period)
+
+# Data ----
+
+ten <- filter(medianwealthdata, type == "ten") %>%
+  select(group, medtot, average, sample, tooltip) %>%
+  mutate(group = factor(group), 
+         group = fct_reorder(group, medtot)) 
+
+# Chart ----
+
+makemedianwealthchart(ten, nudgelabel = 7E4, nudgeaverage = 2E4)
+
+```
+
+### Qualification
+
+```{r}
+
+# Titles ----
+
+title <- "More highly qualified households have higher average wealth."
+subtitle <- str_c("Median household wealth by qualification of the household reference person, Scotland ", params$period)
+
+# Data ----
+
+edu <- filter(medianwealthdata, type == "edu") %>%
+  select(group, medtot, average, sample, tooltip) %>%
+  mutate(group = factor(group), 
+         group = fct_reorder(group, medtot)) 
+
+# Chart ----
+
+makemedianwealthchart(edu, nudgelabel = 8E4, nudgeaverage = 2E4)
+
+```
+
+
+### Economic status
+
+```{r}
+
+# Titles ----
+
+title <- "Employed and retired households typically have above average wealth, whereas other inactive and unemployed households have below average wealth."
+subtitle <- str_c("Median household wealth by economic status of household reference person, Scotland ", params$period)
+
+# Data ----
+
+eco <- filter(medianwealthdata, type == "eco") %>%
+  select(group, medtot, average, sample, tooltip) %>%
+  mutate(group = factor(group), 
+         group = fct_reorder(group, medtot)) 
+
+# Chart ----
+
+makemedianwealthchart(eco, nudgelabel = 7E4, nudgeaverage = 2E4)
+
+```
+
+
+### Table
+
+```{r}
+
+# Titles ----
+
+title <- str_c("Table 2.6 Median total household wealth by household type, Scotland ", params$period)
+
+footnotes <- c(params$source, "Marital status, age, qualification and economic status refer to the household reference person.", "Note that median wealth refers to that of the whole household; therefore, the more people live in the household, the larger their wealth")
+
+# Data ----
+
+tabledata <- allgroups %>%
+  select(type, group, medtot, sample) %>%
+  filter(type != "urb",
+         group != "All") %>%
+  mutate(type = factor(type, 
+                       levels = c("sex", "mar", "age", 
+                                  "dis", "ten", "edu", "eco" )),
+         medtot = comma(medtot, prefix = "£")) %>%
+  arrange(type, group) %>%
+  select(group, medtot)
+
+totalrow <- allgroups %>%
+  filter(type == "sex" ,
+         group == "All") %>%
+  mutate(medtot = comma(medtot, prefix = "£")) %>%
+  select(group, medtot)
+
+tabledata <- rbind(tabledata, totalrow)
+  
+# Table ----
+
+kable(tabledata, 
+      col.names = c("", "Median wealth"), 
+      caption = title,
+      align = c("l", "r", "r", "r", "r", "r", "r")) %>%
+  
+  kable_styling(bootstrap_options = c("striped", 
+                                      "hover", 
+                                      "responsive", 
+                                      "condensed"), 
+                full_width = F, 
+                position = "left") %>%
+  
+  pack_rows("Household type", 1, 9) %>%
+  pack_rows("Marital status", 10, 15) %>%
+  pack_rows("Age", 16, 21) %>%
+  pack_rows("Disability", 22, 23) %>%
+  pack_rows("Tenure", 24, 27) %>%
+  pack_rows("Qualification", 28, 30) %>%
+  pack_rows("Economic status", 31, 34) %>%
+  pack_rows("All households", 35, 35) %>%
+  footnote(alphabet = footnotes)
+
+```
+

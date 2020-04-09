@@ -1,0 +1,578 @@
+# 1. Total Wealth
+
+```{r, ch1_setup, include = FALSE} 
+
+# Import SAS datasets ----
+
+totnet <- read_sas("SAS datasets/totnet.sas7bdat")
+gbmedians <- read_sas("SAS datasets/gbmedians.sas7bdat")
+nations2 <- read_sas("SAS datasets/nations2.sas7bdat")
+
+# Set chart theme ----
+
+ch1_theme <- mytheme +
+    theme(axis.text.y = element_blank(),
+        panel.grid = element_blank())
+
+theme_set(ch1_theme)
+
+# Function: simplify ggiraph syntax ----
+
+makeggiraph <- function(p, width = 1, width_svg = 7){
+  ggiraph({print(p)}, width = width, width_svg = width_svg)
+}
+
+# Function: add titles and source (caption) to charts ----
+
+addtitles <- function(t = title, 
+                      s = subtitle,
+                      c = params$source,
+                      twrap = titlewrap){
+  
+  labs(title = str_wrap(t, twrap), 
+       subtitle = str_wrap(s, twrap*1.1), 
+       caption = c)  
+}
+
+```
+
+This section gives an overview over the amount of personal wealth present in Scotland, how it is made up of four different types of wealth, how wealth has changed over the years, and how Scotland compares to England and Wales.
+
+People's personal wealth is made up of their physical, financial, property and pension wealth, with pension wealth the biggest component of them all. 
+
+**Financial wealth** (net financial wealth) is calculated as the sum of all financial assets (such as bank accounts, savings accounts, stocks and shares) minus all liabilities (such as overdrafts, loans, credit card debt, and arrears on household bills). These can be formal assets, such as savings accounts or loans from banks, or informal assets, such as money held at home, or borrowing from friends and family.
+
+**Physical wealth** (gross physical wealth) is the value of household goods such as appliances, computers, televisions, jewellery, collectables, vehicles, personal number plates, and other valuables. The valuations are derived from respondents' own estimates of the value of items. Any borrowing to finance such purchases is not included in this estimate (borrowing is included in net financial wealth).
+
+**Property wealth** (net property wealth) is the value of all property owned (the main residence and any other property owned) less any debt on the property ( e.g. mortgage) and equity release. It is derived from respondents' own valuations of their properties, rather than any survey valuation.
+
+**Pension Wealth** is an estimate of the value of wealth held in private (non-state) pension schemes, expressed as an equivalent 'pot of money'. It comprises occupational and personal pensions and includes pensions of public sector workers. The estimate is based only on the pension rights accumulated to date and does not include rights which may be built up in future.
+
+## 1.1 Types of wealth {.tabset .tabset-fade}
+
+```{r, include = FALSE}
+
+# Get total wealth and pension wealth share ----
+
+total <- totnet %>%
+  summarise(labels = "Total wealth",
+            share = sum(share),
+            amount = sum(amount))
+
+data <- rbind(totnet, total)
+
+totalwealth <- comma(max(data$amount), scale = 1E-9, prefix = "£", suffix=" billion")
+
+pensionshare <- percent(data$share[data$labels == "Pension wealth"], 1)
+
+# Get median wealth of GB nations ----
+
+mediantotalwealth <- gbmedians %>%
+  select(nation, Total) %>%
+  mutate(Total = comma(Total, prefix = "£", accuracy = 100))
+
+Scotmedian <-  filter(mediantotalwealth, nation == "Scotland")[[2]]
+Walesmedian <-  filter(mediantotalwealth, nation == "Wales")[[2]]
+Englandmedian <-  filter(mediantotalwealth, nation == "England")[[2]]
+
+```
+
+Households in Scotland had just over one trillion pounds (`r totalwealth`) in total wealth in `r params$period`. The largest part of total wealth was pension wealth, which made up `r pensionshare` of all wealth.
+
+An average (median) household in Scotland had `r Scotmedian` in total wealth. An average household in England and Wales was slightly wealthier (`r Englandmedian` and `r Walesmedian`), mainly driven by higher property wealth.
+
+### Components of wealth
+
+```{r, wealthcomponents}
+
+# Titles ----
+
+title <- "Scotland's total personal wealth of over £1 trillion largely made up of pension rights"
+subtitle <- str_c("Total amount and composition of personal wealth in Scotland ", params$period)
+titlewrap <- 78
+
+# Data ----
+
+data <- totnet %>%
+  arrange(share) %>%
+  mutate(labels = factor(labels, levels = as.character(labels)),
+         tooltip = str_c(labels,
+                         ": ",
+                         comma(amount, 
+                               scale=1E-9,
+                               prefix = "£",
+                               suffix = " billion"),
+                         " (",
+                         percent(share, accuracy = 1),
+                         ")"))
+
+# Chart ----
+
+p <- ggplot(data, 
+            aes(x = labels, 
+                y = share, 
+                fill = labels,
+                tooltip = stringi::stri_escape_unicode(tooltip),
+                data_id = tooltip)) +
+  
+  geom_bar_interactive(stat = "identity",
+                       color = "white",
+                       show.legend = FALSE) +
+  
+  scale_fill_manual(values = params$cols_six[c(1,2,5,6)]) +
+  
+  geom_label(aes(label = comma(amount,
+                               scale = 1E-9, 
+                               prefix = "£",
+                               suffix = " billion")), 
+             size = 4, 
+             colour = 'grey20',
+             fill = NA,
+             nudge_y = 0.03) +
+
+  geom_text(aes(label = percent(share, 1)),
+            size = 4,
+            colour = 'white',
+            nudge_y = -0.05) +
+  
+  addtitles() 
+  
+makeggiraph(p)
+
+```
+
+
+### Median wealth
+
+```{r, medianwealthcomponents}
+
+# Titles ----
+
+title <- "The average household's wealth mainly held in property and pensions"
+subtitle <- str_c("Median household wealth by wealth component, Scotland ", params$period)
+titlewrap <- 78
+
+# Data ----
+
+data <- gbmedians %>%
+  remove_labels() %>%
+  gather(type, median, -nation) %>%
+  mutate(type = factor(type, levels = params$types),
+         nation = factor(nation, levels = params$regions),
+         tooltip = str_c(nation, 
+                         " - Median ", 
+                         tolower(type), 
+                         " wealth: ", 
+                         comma(median, prefix = "£", accuracy = 100))) %>%
+  arrange(nation, type) %>%
+  filter(type != "Total",
+         nation == "Scotland")
+  
+# Chart ---- 
+
+p <- ggplot(data, aes(x = type, 
+                      y = median,
+                      fill = type,
+                      tooltip = stringi::stri_escape_unicode(tooltip),
+                      data_id = tooltip)) +
+  
+  geom_bar_interactive(stat = "identity",
+                       color = "white",
+                       show.legend = FALSE) +
+  
+  scale_fill_manual(values = params$cols_six[c(1,2,5,6)]) +
+  
+  scale_x_discrete(labels = str_c(data$type, " wealth")) +
+  
+  geom_label(aes(label = comma(median, 
+                              prefix = "£",
+                              accuracy = 100)), 
+             size = 4, 
+             colour = 'grey20',
+             fill = NA,
+             nudge_y = 4000) +
+
+  addtitles()
+
+makeggiraph(p)
+
+```
+
+### Scotland, England, Wales
+
+```{r, GBmedianwealthcomponents}
+
+# Titles ----
+
+title <- "In England and Wales, but not in Scotland, average property wealth is higher than pension wealth"
+subtitle <- str_c("Median household wealth by wealth component and region, ", params$period)
+titlewrap <- 78
+
+# Data ----
+
+data <- gbmedians %>%
+  remove_labels() %>%
+  gather(type, median, -nation) %>%
+  mutate(type = factor(type, levels = params$types),
+         nation = factor(nation, levels = params$regions),
+         tooltip = str_c(nation, 
+                         " - Median ", 
+                         tolower(type), 
+                         " wealth: ", 
+                         comma(median, prefix = "£", accuracy = 100))) %>%
+  arrange(nation, type) %>%
+  filter(type != "Total",
+         nation != "Great Britain")
+
+# Chart ----
+
+p <- ggplot(data, aes(x = type, 
+                      y = median,
+                      fill = type,
+                      tooltip = stringi::stri_escape_unicode(tooltip),
+                      data_id = tooltip)) +
+  
+  geom_bar_interactive(stat = "identity",
+                       color = "white") +
+  
+  scale_fill_manual(values = params$cols_six[c(1,2,5,6)]) +
+  
+  addtitles() +
+  
+  facet_grid(cols = vars(nation))
+
+makeggiraph(p)
+
+```
+
+### Tables
+
+```{r}
+
+# Titles ----
+
+title <- str_c("Table 1.1 Amount of total wealth and wealth components in Scotland, ", params$period)
+
+# Data ----
+
+total <- summarise(totnet, 
+                   labels = "Total wealth",
+                   share = sum(share),
+                   amount = sum(amount))
+
+data <- rbind(totnet, total) %>%
+  mutate(share = percent(share, 1),
+         amount = comma(amount, scale = 1E-9, prefix = "£", suffix = " billion"))
+
+# Table ----
+
+kable(data, 
+      col.names = c("Type", "Share", "Amount"), 
+      align = c('l', 'r', 'r'), 
+      caption = title)  %>%
+  
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive", "condensed"),
+                full_width = F, position = "left")  %>%
+  
+  footnote(alphabet = c(params$source))
+
+```
+
+```{r}
+
+# Titles ----
+
+title <- str_c("Table 1.2 Median wealth by wealth type and region, ", params$period)
+footnote <- "In this analysis, the median refers to all households, whether or not they have any wealth."
+
+# Data ----
+
+data <- gbmedians %>%
+  remove_labels() %>%
+  gather(type, median, -nation) %>%
+  mutate(type = factor(type, levels = params$types),
+         nation = factor(nation, levels = params$regions),
+         median = comma(median, prefix = "£", accuracy = 100)) %>%
+  arrange(nation, type)  %>%
+  spread(type, median)
+
+# Table ----
+
+kable(data, 
+      col.names = c("Region", params$types), 
+      align = c('l', 'r', 'r', 'r', 'r', 'r'), 
+      caption = title)  %>%
+  
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive", "condensed"),
+                full_width = F, 
+                position = "left") %>%
+  
+  footnote(alphabet = c(params$source, footnote))
+```
+
+
+## 1.2. Wealth over time {.tabset .tabset-fade}
+
+Wealth has been growing over time, and pension wealth has been getting more important compared to other types of wealth in Scotland.
+
+While wealth growth in Scotland and Wales is mainly driven by pension wealth, in England the drivers are pension, property and financial wealth.
+
+In Scotland and Wales, pension wealth is getting more important, and property wealth less important over time and compared to England. 
+
+### Wealth over time
+
+```{r}
+
+# Titles ----
+
+title <- "Total wealth is increasing, driven mainly by pension wealth"
+subtitle <- str_c("Aggregated value of total wealth and wealth components over time (in ", params$period, " prices), Scotland")
+titlewrap = 68
+
+# Data ----
+
+data <- nations2 %>%
+  filter(nation == "Scotland",
+         years != "2014-2016 (w5)") %>%
+  select(years, Financial:Pension, Total) %>%
+  remove_attributes("format.sas") %>%
+  remove_labels() %>%
+  gather(type, value, -years) %>%
+  mutate(type = factor(type, levels = params$types),
+         tooltip = str_c(type, 
+                         " wealth ", 
+                         years, 
+                         ": ", 
+                         comma(value,  
+                               scale = 1E-9,
+                               prefix = "£",
+                               suffix = " billion")))
+
+# Chart ----
+
+p <- ggplot(data[data$type != "Total",], 
+            aes(years, 
+                value, 
+                tooltip = stringi::stri_escape_unicode(tooltip),
+                data_id = tooltip)) + 
+  
+  geom_bar_interactive(aes(fill = type), 
+           stat = "identity", 
+           colour = "white") +
+  
+  geom_label(data=data[data$type == "Total", ], 
+             aes(x = years,
+                 label = comma(value, 
+                               prefix = "£", 
+                               suffix = " billion", 
+                               scale = 1E-9)),
+             nudge_y = 6E10,
+             fill=NA, 
+             alpha = 0.5,
+             colour = "grey20") +
+ 
+  scale_fill_manual(values = params$cols_six[c(1,2,5,6)]) +
+  
+  scale_y_continuous(labels = comma_format(scale=1E-9, 
+                                           prefix = "£", 
+                                           suffix = " billion"),
+                     limits = c(0, 1.25E12),
+                     breaks = c(0, 0.25E12, 0.5E12, 0.75E12, 1E12, 1.25E12)) +
+  
+  theme(legend.position = "right") +
+  
+  addtitles()
+
+makeggiraph(p)
+
+```
+
+### Scotland, England, Wales
+
+```{r}
+
+# Titles ----
+
+title <- "Wealth increase in England driven by pension, property and financial wealth, in Wales and Scotland by pensions mainly"
+subtitle <- str_c("Aggregated value of wealth components over time from ", params$years_rev[1], " to ", params$period, " (in ", params$period, " prices; vertical axes on different scales)")
+titlewrap <- 78
+
+# Data ----
+
+data <- nations2 %>%
+  filter(years != "2014-2016 (w5)",
+         nation != "Great Britain") %>%
+  select(years, nation, Financial:Pension, Total) %>%
+  remove_attributes("format.sas") %>%
+  remove_labels() %>%
+  gather(type, value, -years, -nation) %>%
+  mutate(type = factor(type, levels = params$types),
+         nation = factor(nation, levels = params$regions),
+         tooltip = str_c(type, 
+                         " wealth ", 
+                         years, 
+                         ": ", 
+                         comma(value,
+                               scale = 1E-9,
+                               prefix = "£",
+                               suffix = " billion")))
+
+# Chart ----
+
+p <- ggplot(data[data$type != "Total",], 
+            aes(years, 
+                value, 
+                tooltip = stringi::stri_escape_unicode(tooltip),
+                data_id = tooltip)) + 
+  
+  geom_bar_interactive(aes(fill = type), 
+           stat = "identity", 
+           colour = "white") +
+  
+  scale_fill_manual(values = params$cols_six[c(1,2,5,6)]) +
+  
+  addtitles() +
+  
+  facet_wrap(~nation, scales = "free") 
+  
+makeggiraph(p)
+
+```
+
+### Contribution to total wealth
+
+```{r}
+
+# Titles ----
+
+title <- "In Scotland and Wales, pension wealth getting more important over time and compared to England."
+subtitle <- str_c("Relative contribution of each wealth type to total wealth by region and over time (in ", params$period, " prices)")
+titlewrap <- 78
+
+# Data ----
+
+data <- nations2 %>%
+  mutate(Financial = Financial/Total,
+         Physical = Physical/Total,
+         Property = Property/Total,
+         Pension = Pension/Total,
+         nation = factor(nation, levels = params$regions)) %>%
+  select(nation, years, Financial:Pension) %>%
+  remove_labels() %>%
+  gather(type, value, -nation, -years) %>%
+  filter(nation != "Great Britain",
+         years != "2014-2016 (w5)") %>%
+  mutate(type = factor(type, levels = params$types)) %>%
+  arrange(nation, type) %>%
+  group_by(nation, years) %>%
+  mutate(tooltip = str_c(nation, " ", years, " \n ", type, " wealth: ", 
+                         percent(value, accuracy = 1)))
+
+# Chart ----
+  
+p <- ggplot(data, aes(x = years, 
+                      y = value, 
+                      fill = type,
+                      tooltip = tooltip,
+                      data_id = str_c(nation, type, years))) + 
+  
+  geom_bar_interactive(stat = "identity", 
+           position = "stack", 
+           colour = 'white') +
+  
+  scale_fill_manual(values = params$cols_six[c(1,2,5,6)]) +
+  
+  scale_y_continuous(labels = percent_format()) +
+  
+  addtitles() +
+  
+  facet_wrap(~nation)
+
+makeggiraph(p)
+
+```
+
+### Tables
+
+```{r}
+
+# Titles ----
+
+title <- str_c("Table 1.3 Wealth amounts by region and period")
+footnote = params$inflation
+
+# Data ----
+
+data <- nations2 %>%
+  filter(years != "2014-2016 (w5)") %>%
+  select(years, nation, Financial, Physical, Property, Pension, Total) %>%
+  remove_labels() %>%
+  gather(type, value, -nation, -years) %>%
+  arrange(type, nation, years) %>%
+  mutate(nation = factor(nation, levels = params$regions),
+         type = factor(type, levels = params$types),
+         value = comma(value, 
+                       scale = 1E-9, 
+                       prefix = "£", 
+                       suffix = " billion")) %>%
+  arrange(nation, type) %>%
+  spread(key = years, value = value) %>%
+  select(type, type:params$period)
+
+# Table ----
+
+kable(data, 
+      col.names = c("Wealth type", params$years_rev[c(1,2,3,4,6,7)]), 
+      caption = title,
+      align = c("l", "r", "r", "r", "r", "r", "r")) %>%
+  
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive", "condensed"), full_width = F, position = "left") %>%
+  
+  pack_rows("Scotland", 1, 5) %>%
+  pack_rows("England", 6, 10) %>%
+  pack_rows("Wales", 11, 15) %>%
+  pack_rows("Great Britain", 16, 20) %>%
+  
+  footnote(alphabet = c(params$source, footnote))
+```
+
+```{r}
+
+# Titles ----
+
+title <- "Table 1.4 Relative contribution of each component to total wealth over time"
+
+# Data ----
+
+data <- nations2 %>%
+  mutate(Financial = percent(Financial/Total,1),
+         Physical = percent(Physical/Total, 1),
+         Property = percent(Property/Total, 1),
+         Pension = percent(Pension/Total, 1),
+         Total = percent(1, 1),
+         nation = factor(nation, levels = params$regions )) %>%
+  filter(years != "2014-2016 (w5)") %>%
+  remove_labels() %>%
+  gather(type, value, -years, -nation) %>%
+  mutate(type = factor(type, levels = params$types)) %>%
+  arrange(nation, years, type) %>%
+  spread(years, value) %>%
+  select(type:params$period)
+
+# Table ----
+
+kable(data, 
+      col.names = c("Wealth type", params$years_rev[c(1,2,3,4,6,7)]), 
+      caption = title,
+      align = c("l", "r", "r", "r", "r", "r", "r")) %>%
+  
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive", "condensed"), full_width = F, position = "left") %>%
+  
+  pack_rows("Scotland", 1, 5) %>%
+  pack_rows("England", 6, 10) %>%
+  pack_rows("Wales", 11, 15) %>%
+  pack_rows("Great Britain", 16, 20) %>%
+  
+  footnote(alphabet = c(params$source))
+
+```
