@@ -107,15 +107,3 @@ theme_set(mytheme)
 ```
 ```{r child = "_chapter2.Rmd"}
 ```
-
-```{r child = "_chapter3.Rmd"}
-```
-```{r child = "_chapter4.Rmd"}
-```
-```{r child = "_chapter5.Rmd"}
-```
-```{r child = "_chapter6.Rmd"}
-```
-
-
-
