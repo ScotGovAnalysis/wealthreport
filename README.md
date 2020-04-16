@@ -12,7 +12,7 @@ Files:
 - _chapter4.Rmd (Chapter 4)
 - _chapter5.Rmd (Chapter 5)
 - _chapter6.Rmd (Chapter 6)
-- _site.yml (file that organised this an other html files into a website)
+- _site.yml (file that organised this and other html files into the website www.wealthandassets.scot)
 
 
 Notes:
