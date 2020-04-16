@@ -1,6 +1,8 @@
 # wealthreport
 
-Contains the R Markdown code for the Wealth and Assets in Scotland 2006-2018 report at [http://www.wealthandassets.scot/2020report.html](http://www.wealthandassets.scot/2020report.html):
+Contains the R Markdown code for the Wealth and Assets in Scotland 2006-2018 report at [http://www.wealthandassets.scot/2020report.html](http://www.wealthandassets.scot/2020report.html).
+
+Files:
 - WealthUpdate_tidycode.Rproj (R project file)
 - 2020report.Rmd (main Rmd file which calls the chapter files)
 - _chapter0.Rmd (introduction text)
