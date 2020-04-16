@@ -1,0 +1,1301 @@
+# 3. Financial Wealth and Debt
+
+```{r, ch3_setup, include = FALSE}
+
+# Import SAS datasets ----
+
+medianfin <- read_sas("SAS datasets/medianfin.sas7bdat")
+UDall <- read_sas("SAS datasets/UDall.sas7bdat")
+fvincome <- read_sas("SAS datasets/resilientbyincome.sas7bdat")
+fvsex <- read_sas("SAS datasets/fvsex.sas7bdat")
+fvmar <- read_sas("SAS datasets/fvmar.sas7bdat")
+fvchi <- read_sas("SAS datasets/fvchi.sas7bdat")
+fvage <- read_sas("SAS datasets/fvage.sas7bdat")
+fveco <- read_sas("SAS datasets/fveco.sas7bdat")
+fvdis <- read_sas("SAS datasets/fvdis.sas7bdat")
+fvedu <- read_sas("SAS datasets/fvedu.sas7bdat")
+fvten <- read_sas("SAS datasets/fvten.sas7bdat")
+fvtypo <- read_sas("SAS datasets/fvtypo.sas7bdat")
+fvTreemap <- read_sas("SAS datasets/fvTreemap.sas7bdat")
+
+# Set chart theme ----
+
+theme_set(mytheme)
+
+# Function - make interactive Marimekko chart ----
+
+makemarimekko <- function(data, title, subtitle, height=6) {
+  
+  data <- data %>%
+  remove_labels() %>%
+  filter(Group != "All") %>%
+  mutate(Group = fct_reorder(Group, ProportionResilient),
+         resilient = ResilientHouseholds,
+         vulnerable = VulnerableHouseholds) %>%
+  select(Group, vulnerable, resilient, ProportionResilient) %>%
+  gather(resilient, vulnerable, key = "type", value = "hhlds", -ProportionResilient) %>%
+  group_by(Group) %>%
+  mutate(share = hhlds / sum(hhlds),
+         tot_group = sum(hhlds)) %>%
+  ungroup() %>%
+  group_by(type) %>%
+  arrange(desc(Group)) %>%
+  mutate( ymax = cumsum(tot_group) / sum(tot_group),
+          ymin = ymax - (tot_group / sum(tot_group))) %>%
+  ungroup() %>%
+  group_by(Group) %>%
+  arrange(desc(type)) %>%
+  mutate(xmax = cumsum(share),
+         xmin = xmax - share) %>%
+  ungroup() 
+
+data <- data %>%
+  select(Group, type, ymin, ymax, xmin, xmax, share) %>%
+  arrange(desc(type), desc(share)) %>%
+  mutate(tooltip = str_c(Group,
+                         " (", 
+                         percent(share, accuracy = 1), 
+                         " ", 
+                         type, 
+                         ")"),
+         data_id = str_c(type, Group))
+  
+# labels tibble
+labels <- data %>% 
+  filter(type == "vulnerable") %>%
+  mutate(y = ymax - 0.01) %>%
+  select(Group, xmin, y, tooltip) %>% 
+  ungroup()
+
+p <- ggplot(data) +
+  geom_rect_interactive(aes(ymin = ymin, 
+                            ymax = ymax, 
+                            xmin = xmin, 
+                            xmax = xmax, 
+                            fill = type,
+                            data_id = data_id, 
+                            tooltip = tooltip), 
+                        colour ="white",
+                        size = 0.4 ) +
+  
+  scale_fill_manual(values = str_sort(params$cols_six[c(1,6)], 
+                                      decreasing = TRUE), 
+                    labels = c("Resilient households", 
+                               "Vulnerable households"),
+                    guide = guide_legend(reverse = TRUE)) +
+  
+  geom_text(data = labels, 
+            aes(x = xmin + 0.008, 
+                y = y - 0.001,
+                label = tooltip),
+            hjust = 0, 
+            vjust = 1, 
+            colour = "white" ,
+            show.legend = FALSE) +
+  
+  # Remove all extra spacing
+  theme(panel.background = element_blank(),
+        plot.margin = margin(0, 0, 0, 0, "mm"),
+        legend.margin = margin(0, 0, 0, 0, "mm"),
+        legend.box.spacing = unit(0, "mm"),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        axis.ticks.length = unit(0, "mm"),
+        axis.title = element_blank()) +
+  
+  # add titles etc.
+  addtitles() +
+  labs(caption = str_c(params$source, "; Living Cost and Food Survey")) 
+
+ ggiraph({print(p)}, 
+         width = 1,  
+         width_svg = 7, 
+         height_svg = height)
+ 
+}
+
+
+# Function: simplify ggiraph syntax ----
+
+makeggiraph <- function(p, width = 1, width_svg = 7){
+  
+  require("ggiraph")
+  
+  ggiraph({print(p)}, width = width, width_svg = width_svg)
+}
+
+# Function: add titles and source (caption) to charts ----
+
+addtitles <- function(t = title, 
+                      s = subtitle,
+                      c = params$source,
+                      twrap = titlewrap){
+  require("ggplot2")
+  
+  labs(title = str_wrap(t, twrap), 
+       subtitle = str_wrap(s, twrap*1.1), 
+       caption = c)  
+}
+
+# Function: Make Unmanageable Debt chart ----
+
+makeUDchart <- function(data){
+  
+  p <- ggplot(data, aes(x=fct_reorder(group, rateUD), 
+                weight=rateUD,
+                tooltip = tooltip,
+                data_id = tooltip) ) +
+  
+  geom_bar_interactive(fill = params$cols_six[6]) + 
+  
+  geom_hline(yintercept = average, 
+             alpha = 0.4, 
+             colour = params$cols_six[6], 
+             size = 2) +
+  
+  geom_label(aes(y = rateUD, label = percent(rateUD, accuracy = 0.1)), 
+             nudge_y = 0.008, 
+             fill=NA, 
+             alpha = 0.5,
+             colour = "grey20") +
+  
+  geom_text(data = data[1, ],
+            mapping = aes(x = group, 
+                          y = average, 
+                          label = str_c("Average: ", 
+                                        percent(average, accuracy = 0.1))),
+            nudge_y = 0.002,
+            nudge_x = -0.2,
+            hjust = 0,
+            colour = params$cols_six[6]) +
+  
+  scale_y_continuous(labels = percent_format(accuracy = 1), 
+                     limits = c(0, 0.105)) +
+  
+  coord_flip() + 
+  
+  theme(panel.grid.major.x = element_line(colour = "white"),
+        panel.grid.minor.x = element_line(colour = "white"), 
+        panel.grid.major.y = element_blank() ) +
+  
+  addtitles() 
+  
+makeggiraph(p)
+}
+
+```
+
+Financial wealth is the sum of all financial assets (such as bank accounts, savings accounts, stocks and shares) minus all liabilities (such as overdrafts, loans, credit card debt, and arrears on household bills). These can be formal assets, such as savings accounts or loans from banks, or informal assets, such as money held at home, or borrowing from friends and family.
+
+In this section, we are looking at how financial wealth is distributed across households in Scotland. We’ll look at those households at the extreme bottom of the distribution, who have debt beyond what they can manage, and those further in the middle who may be alright now, but are potentially vulnerable in case of a sudden loss of income.
+
+## 3.1 Financial wealth distribution
+
+```{r, finmedians, include=FALSE}
+
+data <- medianfin %>%
+  filter(Years == max(Years)) %>%
+  arrange(findec) %>%
+  select(median) %>%
+  mutate(median = comma(median, prefix = "£"))
+
+data <- data$median
+
+median <- data[11]
+median1 <- data[1]
+median10 <- data[10]
+
+```
+
+A typical household in Scotland had `r median` in financial wealth after any non-mortgage debt was deducted. 
+
+A household in the top decile ( = 10% band) of the population had on average `r median10`, whereas one in the bottom two deciles had negative financial wealth, or in other words, they were in debt.
+
+As shown in section [2.2 Wealth inequality by wealth type][2.2 Wealth inequality by wealth type], financial wealth is more unequally distributed than pension, property and physical wealth. 
+
+### {.tabset .tabset-fade}
+
+#### Financial wealth distribution
+
+```{r}
+
+# Titles ----
+
+title <- str_c('The wealthiest households had on average ', median10, ' in financial wealth, whereas the least wealthy were in debt.')
+subtitle <- str_c("Median net financial wealth by financial wealth decile, Scotland ", params$period )
+titlewrap <- 68
+
+# Data ----
+
+data <- medianfin %>% 
+  filter(!is.na(findec),
+         Years == params$period) %>%
+  mutate(findec = factor(findec),
+         tooltip = str_c("Financial wealth decile ", 
+                         findec, 
+                         ": ", 
+                         comma(median, prefix = "£", accuracy = 100)))
+# Chart ----
+
+p <- ggplot(data, aes(x = findec,
+                      y = median,
+                      tooltip = stringi::stri_escape_unicode(tooltip),
+                      data_id = tooltip)) + 
+  
+  geom_bar_interactive(stat = 'identity',
+                       colour = "white",
+                       fill = params$cols_six[6]) +
+  
+  geom_label(data = data[10, ],
+             mapping = aes(x = findec, 
+                 y = median, 
+                 label = median10), 
+             nudge_y = 2E4,
+             nudge_x = -0.2,
+             fill=NA, 
+             alpha = 0.5,
+             colour = "grey20") +
+  
+  geom_label(data = data[1, ],
+             mapping = aes(x = findec,
+                           y = median,
+                           label = median1), 
+             nudge_y = 2.5E4,
+             fill=NA, 
+             alpha = 0.5,
+             colour = "grey20") +
+  
+  scale_y_continuous(labels = comma_format(prefix = "£", 
+                                           accuracy = 100)) +
+  
+  theme(axis.title.x = element_text(hjust = 0.5, colour = "grey20")) +
+  
+  labs(x = "Financial wealth decile") +
+  
+  addtitles()
+
+makeggiraph(p)
+
+```
+
+#### Over time
+
+```{r}
+
+# Titles ----
+
+title <- str_c("Wealthier households' financial wealth recovering after a drop in 2010-2012")
+subtitle <- str_c("Median net financial wealth by financial wealth decile (all estimates in ", params$period, " prices), Scotland")
+titlewrap <- 68
+
+# Data ----
+
+data <- medianfin %>% 
+  filter(!is.na(findec),
+         Years != "2014-2016 (w5)") %>%
+  mutate(findec = factor(findec),
+         tooltip = str_c("Financial wealth decile ", 
+                         findec, 
+                         " (",
+                         Years,
+                         "): ", 
+                         comma(median, prefix = "£", accuracy = 100)))
+
+# Chart ----
+
+p <- ggplot(data, aes(x = findec,
+                      y = median,
+                      fill = Years,
+                      tooltip = stringi::stri_escape_unicode(tooltip),
+                      data_id = tooltip)) + 
+  
+  geom_bar_interactive(position = 'dodge',
+                       stat = 'identity',
+                       colour = "white") +
+
+  scale_fill_manual(values = params$cols_ts) +
+  
+  scale_y_continuous(labels = comma_format(prefix = "£", 
+                                           accuracy = 100)) +
+  
+  theme(axis.title.x = element_text(hjust = 0.5, colour = "grey20")) +
+
+  labs(x = "Financial wealth decile") +
+  addtitles()
+
+makeggiraph(p)
+
+```
+
+#### Table 
+
+```{r}
+
+# Titles ----
+
+title <- "Table 3.1 Median net financial wealth by financial wealth decile, Scotland"
+
+# Data ----
+
+data <- medianfin %>% 
+  remove_labels() %>%
+  mutate(findec = ifelse(is.na(findec), "All", findec),
+         findec = factor(findec, levels = params$decs),
+         median = comma(median, prefix = "£")) %>%
+  arrange(findec, Years) %>%
+  filter(Years != "2014-2016 (w5)") %>%
+  spread(Years, median)
+
+# Table ----
+
+kable(data,
+      col.names = c("Financial wealth decile", 
+                    params$years_rev[c(1:4, 6:7)]),
+      caption = title,
+      align = c("l", "r", "r", "r", "r", "r", "r")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive", "condensed"),
+                full_width = F,
+                position = "left") %>%
+  footnote(alphabet = c(params$source, params$inflation) )
+
+```
+
+## 3.2 Unmanageable debt
+
+Some households not only have no financial wealth, but they are debt, or even in unmanageable debt. The definition of Unmanageable Debt is identical to the Office for National Statistics’ Problem Debt definition, see their Household debt in Great Britain report^[Household debt in Great Britain report: [`r str_wrap("https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/incomeandwealth/bulletins/householddebtingreatbritain/latest", 70)`](https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/incomeandwealth/bulletins/householddebtingreatbritain/latest)]. A household is defined as being in unmanageable debt if they have liquidity problems or solvency problems, or both. Liquidity problems mean people struggle with their debt repayments and are falling behind with bills. Solvency problems mean people have a large amount of debt and feel heavily burdened by it.
+
+Unmanageable debt in Scotland is monitored within Scotland's National Performance Framework^[Scotland's National Performance Framework: [https://nationalperformance.gov.scot/measuring-progress/national-indicator-performance](https://nationalperformance.gov.scot/measuring-progress/national-indicator-performance)].
+
+#### Who is in unmanageable debt? {.tabset .tabset-fade}
+
+```{r, include = FALSE}
+
+latestUD <- UDall %>%
+  filter(wave == params$latest) %>%
+  summarise(popUD = sum(pop1, na.rm=TRUE),
+            pop = sum(totpop, na.rm=TRUE),
+            rateUD = percent(popUD/pop, accuracy= 0.1))
+
+latestUD <- latestUD$rateUD[1]
+
+```
+
+In Scotland in 2016-2018, `r latestUD` of households were in unmanageable debt, and this follows a largely decreasing trend since 2010-2012, when measurement started. 
+
+Some types of households are more likely to be in unmanageable debt than the Scottish average. For example, this includes lone parent households and younger households.
+
+***
+
+**Note that small differences in these estimates may not be meaningful and should be interpreted with care. This is because the estimates are based on a sample survey and could be slightly higher or lower if we interviewed a different sample of the population.**
+
+##### Household type
+
+```{r}
+
+# Titles ----
+
+title <- "Working-age single adult households more likely to have unmanageable debt, and lone parents the most"
+subtitle <- str_c("Proportion of households in unmanageable debt by household type, Scotland ", params$period)
+titlewrap <- 60
+
+# Data ----
+
+data <- UDall %>%
+  filter(wave == params$latest) %>%
+  mutate(rateUD = ifelse(is.na(rateUD), 0, rateUD),
+         tooltip = str_c(group, ": ", percent(rateUD, accuracy = 0.1)))
+
+sex <- filter(data, type == "sex") %>%
+  mutate(group = factor(group),
+         group = fct_reorder(group, rateUD),
+         group = str_wrap(group, 25)) %>%
+  arrange(rateUD)
+
+average <- sex %>%
+  summarise(avrate = sum(pop1, na.rm = TRUE)/sum(totpop, na.rm = TRUE))
+
+average <- average[[1]]
+
+# Chart ----
+
+makeUDchart(sex)
+
+```
+
+##### Age
+
+```{r}
+
+# Titles ----
+
+title <- "Younger households more likely to have unmanageable debt"
+subtitle <- str_c("Proportion of households in unmanageable debt by age of the household reference person, Scotland ", params$period)
+titlewrap <- 68
+
+# Data ----
+
+data <- UDall %>%
+  filter(wave == params$latest) %>%
+  mutate(rateUD = ifelse(is.na(rateUD), 0, rateUD),
+         tooltip = str_c(group, ": ", percent(rateUD, accuracy = 0.1)))
+
+age <- filter(data, type == "age") %>%
+  mutate(group = ordered(group, levels = as.character(group)),
+         group = fct_rev(group)) %>%
+  arrange(group)
+
+average <- age %>%
+  summarise(avrate = sum(pop1, na.rm = TRUE)/sum(totpop, na.rm = TRUE))
+
+average <- average[[1]]
+
+# Chart ----
+
+makeUDchart(age)
+
+```
+
+##### Marital status
+
+```{r}
+
+# Titles ----
+
+title <- "Separated people most likely to have unmanageable debt"
+subtitle <- str_c("Proportion of households in unmanageable debt by marital status, Scotland ", params$period)
+titlewrap <- 68
+
+# Data ----
+
+data <- UDall %>%
+  filter(wave == params$latest) %>%
+  mutate(rateUD = ifelse(is.na(rateUD), 0, rateUD),
+         tooltip = str_c(group, ": ", percent(rateUD, accuracy = 0.1)))
+
+mar <- filter(data, type == "mar") %>%
+  mutate(group = factor(group),
+         group = fct_reorder(group, rateUD)) %>%
+  arrange(group)
+
+average <- mar %>%
+  summarise(avrate = sum(pop1, na.rm = TRUE)/sum(totpop, na.rm = TRUE))
+
+average <- average[[1]]
+
+# Chart ----
+
+makeUDchart(mar)
+
+```
+
+##### Disability
+
+```{r}
+
+# Titles ----
+
+title <- "Households with and without disabled household members are similarly likely to be in unmanageable debt"
+subtitle <- str_c("Proportion of households in unmanageable debt by whether there are disabled household members, Scotland ", params$period)
+titlewrap <- 68
+
+# Data ----
+
+data <- UDall %>%
+  filter(wave == params$latest) %>%
+  mutate(rateUD = ifelse(is.na(rateUD), 0, rateUD),
+         tooltip = str_c(group, ": ", percent(rateUD, accuracy = 0.1)))
+
+dis <- filter(data, type == "dis") %>%
+  mutate(group = factor(group),
+         group = fct_reorder(group, rateUD)) %>%
+  arrange(group)
+
+average <- dis %>%
+  summarise(avrate = sum(pop1, na.rm = TRUE)/sum(totpop, na.rm = TRUE))
+
+average <- average[[1]]
+
+# Chart ----
+
+makeUDchart(dis)
+
+```
+
+##### Qualification
+
+```{r}
+
+# Titles ----
+
+title <- "Those with degree-level qualification least likely to have unmanageable debt"
+subtitle <- str_c("Proportion of households in unmanageable debt by qualification of the household reference person, Scotland ", params$period)
+titlewrap <- 68
+
+# Data ----
+
+data <- UDall %>%
+  filter(wave == params$latest) %>%
+  mutate(rateUD = ifelse(is.na(rateUD), 0, rateUD),
+         tooltip = str_c(group, ": ", percent(rateUD, accuracy = 0.1)))
+
+edu <- filter(data, 
+                 type == "edu",
+                 sample > 30) %>%
+  arrange(rateUD) %>%
+  mutate(group = factor(group, 
+                        levels = as.character(group, sort(rateUD)) ),
+         group = str_wrap(group, 25)) %>%
+  arrange(group)
+ 
+average <- edu %>%
+  summarise(avrate = sum(pop1, na.rm = TRUE)/sum(totpop, na.rm = TRUE))
+
+average <- average[[1]]
+
+# Chart ----
+
+makeUDchart(edu)
+
+```
+
+##### Tenure
+
+```{r}
+
+# Titles ----
+
+title <- "Renters more likely to have unmanageable debt"
+subtitle <- str_c("Proportion of households in unmanageable debt by housing tenure, Scotland ", params$period)
+titlewrap <- 68
+
+# Data ----
+
+data <- UDall %>%
+  filter(wave == params$latest) %>%
+  mutate(rateUD = ifelse(is.na(rateUD), 0, rateUD),
+         tooltip = str_c(group, ": ", percent(rateUD, accuracy = 0.1)))
+
+ten <- filter(data, 
+              type == "ten",
+              sample > 30) %>%
+  mutate(group = factor(group),
+         group = fct_reorder(group, rateUD)) %>%
+  arrange(group)
+
+average <- ten %>%
+  summarise(avrate = sum(pop1, na.rm = TRUE)/sum(totpop, na.rm = TRUE))
+
+average <- average[[1]]
+
+# Chart ----
+
+makeUDchart(ten)
+
+```
+
+
+##### Over time
+
+```{r}
+
+# Titles ----
+
+title <- "Fewer households in unmanageable debt"
+subtitle <- str_c("Proportion of households in unmanageable debt over time, Scotland")
+titlewrap <- 68
+
+# Data ----
+
+data <- UDall %>%
+  filter(wave != "w5",
+         type %in% c("age", "dis", "chi")) %>%
+  mutate(rateUD = ifelse(is.na(rateUD), 0, rateUD),
+         tooltip = str_c(group, ": ", percent(rateUD, accuracy = 0.1)),
+         pop1 = ifelse(is.na(pop1), 0, pop1),
+         years = ifelse(wave == "w3", "2010-2012", 
+                        ifelse(wave == "w4", "2012-2014", 
+                               ifelse(wave == "r5", "2014-2016", "2016-2018" ))),
+         years = ordered(years, levels = params$years_rev)) %>%
+  select(type, group, years, totpop, pop1, rateUD, sample, tooltip)
+
+total <- data %>%
+  filter(type == "age") %>%
+  group_by(years) %>%
+  summarise(type = "total",
+            group = "All",
+            totpop = sum(totpop),
+            pop1 = sum(pop1),
+            sample = sum(sample),
+            rateUD = pop1/totpop,
+            tooltip = str_c(group, ": ", percent(rateUD, accuracy = 0.1))) %>%
+  ungroup() 
+
+# Chart ----
+
+p <- ggplot(total, aes(x = years,
+                       y = rateUD,
+                       size = years,
+                       tooltip = tooltip,
+                       data_id = tooltip) ) +
+  
+  geom_point_interactive(shape = 21,
+                         colour = params$cols_ts[6],
+                         aes(fill = years)) + 
+  
+  scale_fill_manual(values = params$cols_ts[c(3,4,5,6)]) +
+  
+  scale_y_continuous(labels = percent_format(accuracy = 1), 
+                     limits = c(0, 0.105)) +
+  
+  addtitles()
+  
+makeggiraph(p)
+
+```
+
+##### Tables
+
+```{r}
+
+# Title ----
+
+title <- "Table 3.2 Proportion of households in unmanageable debt, Scotland"
+
+# Data ----
+
+data <- UDall %>%
+  filter(wave != "w5",
+         type %in% c("age", "sex", "dis", "chi")) %>%
+  mutate(rateUD = ifelse(is.na(rateUD), 0, rateUD),
+         tooltip = str_c(group, ": ", percent(rateUD, accuracy = 0.1)),
+         pop1 = ifelse(is.na(pop1), 0, pop1),
+         years = ifelse(wave == "w3", "2010-2012", 
+                        ifelse(wave == "w4", "2012-2014", 
+                               ifelse(wave == "r5", "2014-2016", "2016-2018" ))),
+         years = factor(years, levels = params$years_rev)) %>%
+  select(type, group, years, totpop, pop1, rateUD, sample, tooltip)
+
+total <- data %>%
+  filter(type == "age") %>%
+  group_by(years) %>%
+  summarise(type = "total",
+            group = "All",
+            totpop = sum(totpop),
+            pop1 = sum(pop1),
+            sample = sum(sample),
+            rateUD = pop1/totpop,
+            tooltip = str_c(group, ": ", percent(rateUD, accuracy = 0.1))) %>%
+  ungroup() 
+
+data <- rbind(data, total) %>%
+  select(type, group, years, rateUD) %>%
+  mutate(rateUD = percent(rateUD, 0.1),
+         type = factor(type, levels = c("total", "age", "sex", "chi", "dis"))) %>%
+  arrange(type, group, years) %>%
+  spread(years, rateUD) %>%
+  select(group:params$period) 
+
+# Table ----
+
+kable(data, 
+      col.names = c("", params$years_rev[c(3,4,6,7)]), 
+      caption = title,
+      align = c("l", "r", "r", "r", "r", "r", "r")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive", "condensed"), 
+                full_width = F, 
+                position = "left") %>%
+  pack_rows("All households", 1, 1) %>%
+  pack_rows("Age", 2, 7) %>%
+  pack_rows("Household type", 8, 16) %>%
+  pack_rows("Children in household", 17, 18) %>%
+  pack_rows("Disability", 19, 20) %>%
+
+    footnote(alphabet = c(params$source, 
+                          "Time series are provided for characteristics that are included in the National Performance Framework^[Scotland's National Performance Framework: [https://nationalperformance.gov.scot/measuring-progress/national-indicator-performance](https://nationalperformance.gov.scot/measuring-progress/national-indicator-performance)]",
+                          "Age refers to the household reference person.") )
+
+```
+
+```{r}
+
+# Title ----
+
+title <- str_c("Table 3.3 Proportion of households in unmanageable debt, Scotland ", params$period)
+
+# Data ----
+
+data <- UDall %>%
+  mutate(rateUD = ifelse(is.na(rateUD), 0, rateUD),
+         tooltip = str_c(group, ": ", percent(rateUD, accuracy = 0.1)))
+
+tabledata <- data %>%
+  filter(wave == params$latest,
+         sample > 30,
+         type != "age",
+         type != "dis",
+         type != "chi",
+         type != "sex") %>%
+  arrange(type) %>%
+  select(group, rateUD) %>%
+  mutate(rateUD = percent(rateUD, accuracy = 0.1))
+
+# Table ----
+
+kable(tabledata, 
+      col.names = c("", "Proportion in unmanageable debt"), 
+      caption = title,
+      align = c("l", "r", "r", "r", "r", "r", "r")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive", "condensed"), 
+                full_width = F, 
+                position = "left") %>%
+  pack_rows("Qualification", 1, 3) %>%
+  pack_rows("Marital status", 4, 9) %>%
+  pack_rows("Tenure", 10, 13) %>%
+
+    footnote(alphabet = c(params$source, "Marital status and qualification refer to the household reference person.") )
+
+```
+
+## 3.3 Financial vulnerability
+
+```{r, include = FALSE}
+
+data <- fvsex %>%
+  filter(Group == "All")
+
+ProportionResilient <- percent(data$ProportionResilient[[1]], accuracy = 1)
+ProportionVulnerable <- percent(1-data$ProportionResilient[[1]], accuracy = 1)
+VulnerableHouseholds <- comma(data$VulnerableHouseholds, accuracy = 10000)
+
+```
+
+In this analysis, we looked at households in Scotland that are financially vulnerable. We found that **`r ProportionVulnerable`  of households** (or `r VulnerableHouseholds` households) were financially vulnerable during `r params$period`.
+
+Most poverty analysis is focused on people's income only and says nothing about their savings. But when a household suddenly loses a large part of their income, for example because someone loses their job, then some households are able to draw on their savings to pay the rent and shop for food until a new job is found, while other households may have no savings to draw on.
+
+In order to understand how many households might struggle if they lost their main source of income, we looked at people's savings. Having an emergency fund might become more important in times where the future of the Scottish labour market is uncertain, for example because of Brexit.
+
+### Definitions 
+
+In this analysis, we call a household **financially vulnerable** when there are not enough savings to cover basic living costs for three months. We chose **three months** because if someone loses their job, it can often take a few months until they have started a new one or get paid benefits^[The three months period is a rule of thumb used for emergency or rainy day funds in a number of reports: three months' essential outgoings ([Money Advice Service](https://www.moneyadviceservice.org.uk/en/articles/emergency-savings-how-much-is-enough)), three to six  months' worth of regular expenses ([Barclays](https://www.barclays.co.uk/savings/guides/saving-for-the-unexpected/)), six months' worth of bills ([MoneySavingsExpert.com in a BBC article](https://www.bbc.co.uk/news/magazine-35801951)), three months of usual wages ([money.co.uk](https://www.money.co.uk/guides/do-you-really-need-an-emergency-fund.htm)).    
+Money Advice Service article: [https://www.moneyadviceservice.org.uk/en/articles/emergency-savings-how-much-is-enough](https://www.moneyadviceservice.org.uk/en/articles/emergency-savings-how-much-is-enough)    
+Barclays article: [https://www.barclays.co.uk/savings/guides/saving-for-the-unexpected](https://www.barclays.co.uk/savings/guides/saving-for-the-unexpected)      
+BBC article: [https://www.bbc.co.uk/news/magazine-35801951](https://www.bbc.co.uk/news/magazine-35801951)    
+Money article: [https://www.money.co.uk/guides/do-you-really-need-an-emergency-fund.htm](https://www.money.co.uk/guides/do-you-really-need-an-emergency-fund.htm)]. 
+
+Under **basic living costs** we include average costs of rent, food and fuel, such as gas and electricity. Of course, households with more adults and children have higher costs than smaller households, so we used different costs for different household sizes. On average, Scottish households spent £1,535 on basic living costs over three months in `r params$period`^[We calculated basic living costs using the Office for National Statistics' [Family Spending in the UK](https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/expenditure/bulletins/familyspendingintheuk/financialyearending2018) publication for 2016/17 - 2017/18. £1,535 is the total weekly Scottish median expenditure on housing, fuel and power, food and non-alcoholic drinks, averaged over three years, multiplied by 52 (weeks) and divided by 4 (quarters). We adjusted for different household types by looking at median expenditure by household type relative to the average (UK level). This adjustment means that basic living costs range between £832 for a household with a single retired person and £2,082 for a household with two adults and three or more children. Note that we didn't adjust for any other extra costs some households have due to their individual circumstances, but used an average for each different size of household.   
+Publication: [`r str_wrap("https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/expenditure/bulletins/familyspendingintheuk/financialyearending2018", 70)`](https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/expenditure/bulletins/familyspendingintheuk/financialyearending2018)].
+
+Under **savings** we include any kinds of savings and investments that can be turned into cash within a few days. This includes current, ISA and savings accounts, premium bonds, stocks, shares and trusts, but not fixed-term or dividend-only investment products. From this, we take off current account overdrafts, any arrears, and repayment commitments for three months from loans, credit cards, store cards, mail orders, and purchase hire.
+
+### Who is financially vulnerable? {.tabset .tabset-fade}
+
+Using the definitions above, we find that on average, `r ProportionVulnerable` of households were financially vulnerable in `r params$period`. We call the remaining `r ProportionResilient` of households financially resilient.
+
+The chart below shows that households with lower incomes are more often financially vulnerable compared to those with higher incomes. However, vulnerable households are found in all income bands across Scotland. Even some households with the highest incomes have little savings and might struggle if their income suddenly stopped. And on the other hand, some low-income households do have enough savings to tide them over a tough spot.
+
+#### Income
+
+```{r}
+
+# Titles ----
+
+title <- c("Financially vulnerable households are found across all incomes but mostly at the lower end")
+subtitle <- str_c("Proportion of households who are financially vulnerable by household income decile (1 = lowest income, 10 = highest income), Scotland ", params$period)
+titlewrap <- 68
+
+# Data ----
+
+data <- fvincome %>%
+  filter(incDecile != "All") %>%
+  mutate(ProportionVulnerable = 1- ProportionResilient,
+         incDecile = factor(incDecile, levels = as.character((incDecile)))) %>%
+  select(incDecile, ProportionVulnerable) %>%
+  arrange(incDecile) %>%
+  mutate(tooltip = str_c("Income decile ",
+                         incDecile, 
+                         ": ", 
+                         percent(ProportionVulnerable, 1), 
+                         " vulnerable"))
+# Chart ----
+
+p <- ggplot(data, aes(x = incDecile, 
+                      weight = ProportionVulnerable,
+                      tooltip = tooltip,
+                      data_id = tooltip)) + 
+  
+  geom_bar_interactive(fill = params$cols_six[6]) +
+  
+   # add data labels
+  geom_text(aes(label = percent(ProportionVulnerable, accuracy = 1),
+                 y = ProportionVulnerable), 
+             nudge_y = -0.05, 
+             colour = "white") +
+  
+  # add titles etc.
+  labs(x = "Income decile") +
+  addtitles() +
+  
+  theme(axis.title = element_text(colour = "grey20"),
+        axis.text.x = element_text(hjust = 0),
+        axis.title.y = element_blank()) +
+  
+  scale_y_continuous(limits = c(0,1), labels = percent_format(accuracy = 1))
+
+makeggiraph(p)
+
+```
+
+#### Table
+
+```{r}
+
+# Title ----
+
+title <- str_c("Table 3.4 Proportion of households who are financially vulnerable, Scotland ", params$period)
+
+# Data ----
+
+data <- fvincome %>%
+  mutate(ProportionVulnerable = 1- ProportionResilient,
+         ProportionVulnerable = percent(ProportionVulnerable, accuracy = 1)) %>%
+  select(incDecile, ProportionVulnerable)
+
+# Table ----
+
+kable(data, 
+      col.names = c("Income decile", "Proportion of households"), 
+      caption = title,
+      align = c("l", "r", "r", "r", "r", "r", "r")) %>%
+  kable_styling(bootstrap_options = c("striped", 
+                                      "hover", 
+                                      "responsive", 
+                                      "condensed"), 
+                full_width = F, 
+                position = "left") %>%
+  footnote(alphabet = c(str_c(params$source, "; Living Cost and Food Survey"), 
+                        "Income deciles are based on equivalised net household income")) 
+
+```
+
+### Characteristics {.tabset .tabset-fade}
+
+We found financially vulnerable households across all population groups. The groups of households that are most likely to be financially vulnerable (workless, young, with children, lone parents) are often small, so the bulk of financially vulnerable households is made up of households with different characteristics: they often are working-age couples in employment and living in rented homes.
+
+The charts below show both, how likely a group is to be financially vulnerable, and how large each group is. On the horizontal axis, the likelihood is shown, and the area of the rectangles shows how many households are in each group.
+
+***
+
+**Note that small differences in these estimates may not be meaningful and should be interpreted with care. This is because the estimates are based on a sample survey and could be slightly higher or lower if we interviewed a different sample of the population.**
+
+#### Household type
+
+```{r}
+
+# Titles ----
+
+title <- "Lone parents most likely to be financially vulnerable, but working-age couples with children make up largest group of vulnerable households"
+subtitle <- str_c("Proportion of households who are financially vulnerable by household type, Scotland ", params$period)
+titlewrap <- 77
+
+# Data ----
+
+data <- filter(fvsex, Group != "Other type")
+
+# Chart ----
+
+makemarimekko(data = data, title = title, subtitle = subtitle)
+
+```
+
+#### Marital status
+
+```{r}
+
+# Titles ----
+
+title <- "Cohabiting households most likely to be financially vulnerable, but married couples largest group of vulnerable households"
+subtitle <- str_c("Proportion of households who are financially vulnerable by marital status, Scotland ", params$period)
+titlewrap <- 77
+
+# Data ----
+
+divsep <- fvmar %>%
+  filter(Group %in% c("Divorced", "Separated")) %>%
+  summarise(Group = "Divorced or separated",
+            AllHouseholds = sum(AllHouseholds),
+            VulnerableHouseholds = sum(VulnerableHouseholds),
+            ResilientHouseholds = sum(ResilientHouseholds), 
+            Sample = sum(Sample),
+            ProportionResilient = ResilientHouseholds/AllHouseholds) %>%
+  select(Group, ProportionResilient, AllHouseholds, ResilientHouseholds, VulnerableHouseholds, Sample)
+
+data <- fvmar %>%
+  filter(Group %in% c("Married", "Cohabiting", "Single", "Widowed"))
+
+data <- rbind(data, divsep)
+            
+# Chart ----
+
+makemarimekko(data = data, 
+              title = title, 
+              subtitle = subtitle, 
+              height = 5)
+
+```
+
+#### Children
+
+```{r}
+
+# Titles ----
+
+title <- "Households with children are more likely to be financially vulnerable, but make up a smaller part of vulnerable households"
+subtitle <- str_c("Proportion of households who are financially vulnerable by whether there are children in household, Scotland ", params$period)
+titlewrap <- 77
+
+sasdata <- read_sas("SAS datasets/fvchi.sas7bdat")
+
+# Data
+
+chi <- fvchi %>%
+  filter(Group != "All") %>%
+  filter(Group != "No children") %>%
+  summarise(Group = "With children",
+            AllHouseholds = sum(AllHouseholds),
+            VulnerableHouseholds = sum(VulnerableHouseholds),
+            ResilientHouseholds = sum(ResilientHouseholds), 
+            Sample = sum(Sample),
+            ProportionResilient = ResilientHouseholds/AllHouseholds) %>%
+  select(Group, ProportionResilient, AllHouseholds, ResilientHouseholds, VulnerableHouseholds, Sample)
+
+data <- fvchi %>%
+  filter(Group == "No children")
+
+data <- rbind(data, chi)
+
+# Chart ----
+
+makemarimekko(data = data, title = title, subtitle = subtitle, height = 4)
+
+```
+
+#### Age
+
+```{r}
+
+# Titles ----
+
+title <- "Younger households more likely to be financially vulnerable"
+subtitle <- str_c("Proportion of households who are financially vulnerable by age of the household reference person, Scotland ", params$period)
+titlewrap <- 77
+
+# Chart
+
+makemarimekko(data = fvage, 
+              title = title, 
+              subtitle = subtitle, 
+              height = 5)
+
+```
+
+#### Economic status
+
+```{r}
+
+# Titles ----
+
+title = "The unemployed have highest risk of being financially vulnerable, but the employed make up largest group among financially vulnerable households"
+subtitle = str_c("Proportion of households who are financially vulnerable by economic status, Scotland ", params$period)
+titlewrap <- 77
+
+# Chart ----
+
+makemarimekko(data = fveco, 
+              title = title, 
+              subtitle = subtitle,
+              height = 6)
+
+```
+
+#### Disability
+
+```{r}
+
+# Titles ----
+
+title <- "Households with disabled household members more likely to be financially vulnerable"
+subtitle <- str_c("Proportion of households who are financially vulnerable by whether any household members are disabled, Scotland ", params$period)
+titlewrap <- 77
+
+# Chart ----
+
+makemarimekko(data = fvdis, title = title, subtitle = subtitle, height = 4)
+
+```
+
+#### Qualification
+
+```{r}
+
+# Titles ----
+
+title <- "Lower qualified households more likely to be financially vulnerable"
+subtitle <- str_c("Proportion of households who are financially vulnerable by qualification of the household reference person, Scotland ", params$period)
+titlewrap <- 77
+
+# Chart ----
+
+makemarimekko(data = fvedu, 
+              title = title, 
+              subtitle = subtitle, 
+              height = 5)
+
+```
+
+#### Tenure
+
+```{r}
+
+# Titles ----
+
+title = "Renters have highest risk of being financially vulnerable and make up largest group among financially vulnerable households"
+subtitle = str_c("Proportion of households who are financially vulnerable by housing tenure, Scotland ", params$period)
+titlewrap <- 77
+
+# Chart ----
+
+makemarimekko(data = fvten, 
+              title = title, 
+              subtitle = subtitle, 
+              height = 5)
+
+```
+
+
+#### Table
+
+```{r}
+
+# Title ----
+
+title <- str_c("Table 3.5 Proportion of households who are financially vulnerable among all households, and among financially vulnerable households (composition) in each group, Scotland ", params$period)
+
+# Data ----
+
+fvsex <- mutate(fvsex, type = "sex")
+fvmar <- mutate(fvmar, type = "mar")
+fvchi <- mutate(fvchi, type = "chi")
+fvage <- mutate(fvage, type = "age")
+fveco <- mutate(fveco, type = "eco")
+fvdis <- mutate(fvdis, type = "dis")
+fvedu <- mutate(fvedu, type = "edu")
+fvten <- mutate(fvten, type = "ten")
+
+data <- rbind(fvsex, fvmar, fvchi, fvage, fveco, fvdis, fvedu, fvten)
+
+data <- data %>%
+  group_by(type) %>%
+  mutate(CompositionVulnerable = VulnerableHouseholds/sum(VulnerableHouseholds[which(Group != "All")]),
+         CompositionVulnerable = percent(CompositionVulnerable, accuracy = 1),
+         ProportionVulnerable = 1 - ProportionResilient,
+         ProportionVulnerable = percent(ProportionVulnerable, accuracy = 1)) %>%
+  ungroup() %>%
+  select(Group, ProportionVulnerable, CompositionVulnerable)
+
+# Table ----
+
+kable(data, 
+      col.names = c("", "Proportion", "Composition"), 
+      caption = title,
+      align = c("l", "r", "r", "r", "r", "r", "r")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive", "condensed"), 
+                full_width = F, 
+                position = "left") %>%
+  pack_rows("Household type", 1, 10) %>%
+  pack_rows("Marital status", 11, 17) %>%
+  pack_rows("Children in household", 18, 22) %>%
+  pack_rows("Age", 23, 29) %>%
+  pack_rows("Economic status", 30, 34) %>%
+  pack_rows("Disability", 35, 37) %>%
+  pack_rows("Qualification", 38, 41) %>%
+  pack_rows("Housing tenure", 42, 45) %>%
+  footnote(alphabet = c(str_c(params$source, "; Living Cost and Food Survey"), "Age, economic status and qualification refer to the household reference person", "Social and private rented sectors were combined in this analysis, as living costs were based on average rents."))
+
+```
+
+
+### How much do financially vulnerable households need to be resilient? {.tabset .tabset-fade}
+
+```{r, include = FALSE}
+
+sasdata <- read_sas("SAS datasets/fvtypo.sas7bdat")
+
+sasdata$Subgroup[sasdata$Group == ""] <- "All"
+
+TotalCost <- filter(sasdata, Group == "") %>%
+  select(gap)
+
+TotalCost <- comma(TotalCost[[1]], accuracy = 0.1,  scale = 1E-9, prefix = "£", suffix = " billion")
+
+ScotlandMedian <- filter(sasdata,  Subgroup == "All") %>%
+  select(medianGap)
+
+ScotlandMedian <- comma(ScotlandMedian[[1]], accuracy = 1, prefix = "£")
+
+MaxMedian <- filter(sasdata,  medianGap == max(medianGap)) %>%
+  select(medianGap)
+
+MaxMedian <- comma(MaxMedian[[1]], accuracy = 1, prefix = "£")
+
+maxgroup <- filter(sasdata, 
+                   Subgroup != "All") %>%
+  filter(VulnerableHouseholds == max(VulnerableHouseholds)) 
+
+maxav <- comma(maxgroup$medianGap[[1]], accuracy = 1, prefix = "£")
+maxgroup <- comma(maxgroup$VulnerableHouseholds[[1]], accuracy = 10000)
+
+```
+
+Over `r TotalCost` would be required to make every household in Scotland financially resilient.
+
+The table below shows examples of different kinds of households and how many of them are estimated to be financially vulnerable. The households are grouped by tenure, age and work status of the household reference person, and whether there are any dependent children in the household.
+
+The table also shows how much money the different groups would need to be financially resilient, overall as a group (total gap), and on average per household (median gap). The main reason why the average amounts differ between groups is that the groups have different household sizes. For example, households with children generally contain more people and have therefore higher costs of living. And in some cases, the median gaps are quite high because many vulnerable households not only have no savings, but they are also in debt.
+
+Households with children and a mortgage had the largest average gap, `r MaxMedian` per household. The main reason for this is that they had higher living costs.
+
+The largest group of financially vulnerable households were workless working-age households who rent their homes, `r maxgroup` households. But their *average* gap per household (`r maxav`) was below the Scotland average of `r ScotlandMedian`.
+
+The tree map shows which groups from the table are larger or smaller. 
+
+#### Cost of financial resilience table
+ 
+```{r}
+
+# Title ----
+
+title <- str_c("Table 3.6 Number of households who are financially vulnerable and cost of filling that gap in each group, Scotland ", params$period)
+
+# Data ----
+
+fvtypo$Subgroup[fvtypo$Group == ""] <- "All"
+
+data <- fvtypo %>%
+  select(Subgroup, VulnerableHouseholds, gap, medianGap) %>%
+  filter(Subgroup != "All")
+
+Total <- fvtypo %>%
+  select(Subgroup, VulnerableHouseholds, gap, medianGap) %>%
+  filter(Subgroup == "All" )
+
+data <- rbind(data, Total)  %>%
+  mutate(VulnerableHouseholds = comma(VulnerableHouseholds, accuracy = 10000),
+         gap = comma(gap, scale = 1E-6, prefix = "£", suffix = " million"),
+         medianGap = comma(medianGap, accuracy = 100, prefix = "£"))
+
+# Table ----
+
+kable(data, 
+      col.names = c("Group", "Number of households", "Total gap", "Median gap"), 
+      caption = title) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive", "condensed"), 
+                full_width = F, 
+                position = "left") %>%
+  footnote(alphabet = str_c(params$source, "; Living Cost and Food Survey"))
+
+```
+
+
+#### Tree map
+
+```{r, include = FALSE}
+
+# Data ----
+
+data <- fvTreemap %>%
+  mutate(Subgroup = ifelse(Group == "Owning outright", NA, Subgroup))
+
+# Make treemap object ----
+
+tm <- treemap(data, 
+        index = c("Group", "Subgroup"), 
+        vSize = "VulnerableHouseholds", 
+        type = "categorical", 
+        vColor = "Group", 
+        palette = params$cols_six[c(3, 4,5,6)],
+        title = "Financially vulnerable households")
+
+```
+
+```{r}
+
+# Titles
+
+title <- "A wide range of households are financially vulnerable"
+subtitle <- str_c("Financially vulnerable households by tenure, work status, age, and whether there are children in the household, Scotland ", params$period)
+titlewrap <- 68
+
+# Data ----
+
+data <- tm$tm %>%
+  mutate(Subgroup = as.character(Subgroup),
+         Subgroup = ifelse(is.na(Subgroup), " ", Subgroup),
+         Subgroup = ifelse(Subgroup == ".", " ", Subgroup),
+         tooltip = str_c(Group, 
+                         ifelse(Subgroup == " ", "", ", "), 
+                         Subgroup,
+                         ": ",
+                         comma(vSize, accuracy = 10000),
+                         " households"))
+# Chart ----
+
+p <- ggplot(data, 
+       aes(xmin = x0+w, 
+           xmax = x0, 
+           ymin = y0+h, 
+           ymax = y0, 
+           fill = ifelse(level == 1, NA, color),
+           tooltip = tooltip,
+           data_id = tooltip)) +
+
+  scale_fill_identity() + 
+  
+  # borders color and thickness
+  geom_rect_interactive(aes(size = I((2:1)[level])), 
+             color = "grey40") + 
+  
+  theme(
+    text = element_text(colour = "grey20" ), 
+    
+    axis.ticks = element_blank(), 
+    axis.title = element_blank(), 
+    axis.text = element_blank(), 
+    axis.line = element_blank(), 
+    panel.background = element_blank()  ) +
+  
+  geom_text(aes(x0+w/2, 
+                y0+h/2, 
+                label = stringr::str_wrap(Subgroup, 17)), 
+            na.rm = TRUE) + 
+  
+  geom_label(aes(x, 
+                 y, 
+                 label = Group), 
+              tm$tm %>% 
+               group_by(Group) %>% 
+               summarise(x = mean(x0+w/2), 
+                         y = mean(y0+h/2), 
+                         vSize = mean(vSize)), 
+             inherit.aes = F, 
+             fill = "white", 
+             alpha = 0.8, 
+             fontface = "bold") +
+  
+  # add titles etc.
+  addtitles() +
+  labs(caption = str_c(params$source, "; Living Cost and Food Survey"))
+
+makeggiraph(p)
+
+```

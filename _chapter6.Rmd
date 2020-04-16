@@ -1,0 +1,97 @@
+# Brief methodology
+
+The methodology used for this report is based on the Office for National Statistics' methodology for the Wealth in Great Britain National Statistics publication series^[ONS Wealth in Great Britain report: [`r str_wrap("https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/incomeandwealth/bulletins/totalwealthingreatbritain/april2016tomarch2018", 70)`](https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/incomeandwealth/bulletins/totalwealthingreatbritain/april2016tomarch2018)]. Further detail on methodology can be found on ONS's webpages.
+
+### The Wealth and Assets Survey
+
+The analysis in this report is based on data from the Wealth and Assets Survey (WAS), which is a valuable source of information on the economic well-being of households in Great Britain. WAS is managed by the Office for National Statistics.
+
+The survey has a large sample size and almost complete coverage of Great Britain. The sample of private households in Scotland however excludes households north of the Caledonian Canal and the Scottish islands. While there are some estimated numbers of households in Scotland included, it should be noted that these numbers are for illustrative purposes only, and may not necessarily be representative of households north of the Caledonian Canal and on the Scottish islands.
+
+WAS is a sample survey and any numbers shown here are estimates only and could be slightly higher or lower if we interviewed a different sample of the population. 
+
+### Change of survey period
+
+Data is collected over waves of two years, with the first wave data collected between July 2006 to June 2008. The survey period changed from a June-July pattern to an April-March pattern in 2014. Therefore, estimates for 2012-2014 and for 2014-2016 are both based on data from a partially overlapping time period (April to June 2014). 
+
+The latest estimates are based on data collected from April 2016 to March 2018.
+
+### Inflation adjustment
+
+Wealth estimates and income estimates have been deflated to April 2016 to March 2018 prices using the Consumer Prices Index including owner occupiers’ housing costs (CPIH). The table below shows the deflators used for each period.
+
+```{r}
+
+# Title 
+
+title <- "Inflation adjustment for each period"
+
+# Data
+
+data <- tribble(
+  ~Period, ~Deflator,
+  "2006-2008",   1.23,
+  "2008-2010",   1.17,
+  "2010-2012",   1.10,
+  "2012-2014",   1.05,
+  "2014-2016",   1.03,
+  "2016-2018",   1.00
+)
+
+# Table
+
+kable(data,
+      caption = title)  %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive", "condensed"), full_width = F, position = "left") %>%
+  footnote(alphabet = c("Source: ONS Total wealth in Great Britain: April 2016 to March 2018"))
+
+```
+
+### Income equivalisation
+
+Household income was adjusted for household size using the modified OECD equivalence scale.
+
+# About these statistics
+
+Official and National Statistics are produced to high professional standards set out in the Code of Practice for Official Statistics. Both undergo regular quality assurance reviews to ensure that they meet customer needs and are produced free from any political interference.
+
+### Experimental Statistics: data being developed
+
+These statistics are currently being developed and have been published to involve users and stakeholders in their development, and to build in quality and understanding at an early stage. 
+
+As this is the Scottish Government's first Official Statistics publication on wealth, we welcome feedback on the content and presentation in order to improve future releases.
+
+### Correspondence, feedback and enquiries
+
+For enquiries or feedback about this publication please contact:
+
+Communities Analysis Division  
+Telephone: 0131 244 5851  
+e-mail: [social-justice-analysis@gov.scot](mailto:social-justice-analysis@gov.scot)
+
+For general enquiries about Scottish Government statistics please contact:  
+
+Office of the Chief Statistician  
+Telephone: 0131 244 0442  
+e-mail: [statistics.enquiries@gov.scot](mailto:statistics.enquiries@gov.scot)
+
+### How to access background or source data
+
+The data collected for this statistical bulletin cannot be made available by Scottish Government for further analysis as Scottish Government is not the data controller. Source data may be accessed through the UK Data Service: [www.ukdataservice.ac.uk/](https://www.ukdataservice.ac.uk/)
+
+### Complaints and suggestions
+
+If you are not satisfied with our service or have any comments or suggestions, please write to the Chief Statistician: 
+
+3WR St Andrews House  
+Edinburgh, EH1 3DG  
+Telephone: (0131) 244 0302  
+e-mail [statistics.enquiries@gov.scot](mailto:statistics.enquiries@gov.scot)
+
+If you would like to be consulted about statistical collections or receive notification of publications, please register your interest at [www.gov.scot/scotstat](https://www2.gov.scot/Topics/Statistics/scotstat)
+
+Details of forthcoming publications can be found at [www2.gov.scot/Topics/Statistics/ForthcomingPubs](https://www2.gov.scot/Topics/Statistics/ForthcomingPubs)
+
+### Crown Copyright 2020
+
+You may use or re-use this information (not including logos) free of charge in any format or medium, under the terms of the Open Government Licence. See: [www.nationalarchives.gov.uk/doc/open-government-licence/](https://www.nationalarchives.gov.uk/doc/open-government-licence/) 

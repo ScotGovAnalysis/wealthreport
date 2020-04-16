@@ -130,8 +130,8 @@ makemedianwealthchart <- function(data,
    r <- ggplot(data, 
               aes(x = group, 
                   weight = medtot,
-                  tooltip = stringi::stri_escape_unicode(tooltip),
-                  data_id = tooltip)) + 
+                  data_id = tooltip,
+                  tooltip = stringi::stri_escape_unicode(tooltip))) + 
      
     geom_bar_interactive(fill = params$cols_six[6]) +
   
@@ -568,7 +568,6 @@ makeGinichart("mean2median", 1.5, 2.5, formatfn = comma_format(accuracy = 0.1))
 
 ```
 
-
 ### Wealth shares
 
 ```{r}
@@ -874,7 +873,6 @@ makeGinichartGB("absPalma", 0, 3E6,
                                            accuracy = 1 ))
 ```
 
-
 ### Table
 
 ```{r}
@@ -924,3 +922,246 @@ kable(data, col.names = names, caption = title,
   footnote(alphabet = footnotes )
 
 ```
+
+
+## 2.5 Who are the wealthiest and least wealthy households {.tabset .tabset-fade}
+
+Some people are more likely to be wealthy than others - for example, many people nearing retirement will have accumulated a considerable amount of wealth over their working lives, and are getting ready to use it up, whereas many young people are only starting to build wealth. 
+
+While this accumulation of wealth over time and with age is natural, some groups of the population are excluded from this process, as they don't have any income to spare for saving up, or they cannot afford to get on the property ladder, or they are not enrolled in any private pension scheme.
+
+The charts below show the total wealth of a typical household (median wealth) for a wide range of household characteristics, comparing each group with the Scotland average. Examples of households with above average wealth are pensioner couples, married couples, home owners, or households with degree-level qualifications. Examples of households with below average wealth are lone parent households, households in social rented housing, or households where the household reference person^[The household reference person (HRP) is the person that is the sole or joint householder or is responsible for household affairs. Where there are joint householders, the HRP will be the person with the highest income. In cases where income is the same for a joint householder, the eldest person is assigned as the HRP.] is unemployed or economically inactive (but not retired).
+
+***
+
+**Note that small differences in median wealth between different household types may not be meaningful and should be interpreted with care. This is because these estimates are based on a sample survey and could be slightly higher or lower if we interviewed a different sample of the population.**
+
+### Household type
+
+```{r}
+
+# Titles ----
+
+title <- "Pensioner couples wealthiest on average, lone parents the least wealthy."
+subtitle <- str_c("Median household wealth by household type, Scotland ", params$period)
+titlewrap <- 60
+
+# Data ----
+
+medianwealthdata <- allgroups %>%
+  select(type, group, medtot, sample) %>%
+  mutate(average = medtot[group == "All"][1],
+         tooltip = str_c(group, ": ", comma(medtot, prefix = "£")),
+         group = str_wrap(group, 25)) %>%
+  filter(group != "All") %>%
+  arrange(medtot)
+
+sex <- filter(medianwealthdata, type == "sex") %>%
+  select(group, medtot, average, sample, tooltip) %>%
+  mutate(group = factor(group), 
+         group = fct_reorder(group, medtot)) 
+
+# Chart ----
+
+p <- makemedianwealthchart(sex, nudgelabel = 7.5E4, nudgeaverage = 3E4)
+
+makeggiraph(p)
+
+```
+
+### Marital status
+
+```{r}
+
+# Titles ----
+
+title <- "Married couples wealthiest on average, singles least wealthy."
+subtitle <- str_c("Median household wealth by marital status of the household reference person, Scotland ", params$period)
+
+# Data ----
+
+mar <- filter(medianwealthdata, type == "mar") %>%
+  select(group, medtot, average, sample, tooltip) %>%
+  mutate(group = factor(group), 
+         group = fct_reorder(group, medtot)) 
+
+# Chart ----
+
+p <- makemedianwealthchart(mar)
+makeggiraph(p)
+
+```
+
+### Age
+
+```{r}
+
+# Titles ----
+
+title <- "Average wealth grows with age up to pension age when it decreases again."
+subtitle <- str_c("Median household wealth by age of the household reference person, Scotland ", params$period)
+
+# Data ----
+
+age <- filter(medianwealthdata, type == "age") %>%
+  select(group, medtot, average, sample, tooltip) %>%
+  arrange(group) %>%
+  mutate(group = factor(group), 
+         group = fct_rev(group))
+
+# Chart ----
+
+p <- makemedianwealthchart(age, nudgelabel = 6E4, nudgeaverage = 2E5)
+makeggiraph(p)
+
+```
+
+### Disability
+
+```{r}
+
+# Titles ----
+
+title <- "Households with no disabled household members have above average wealth, whereas those with disabled members have below average wealth."
+subtitle <- str_c("Median household wealth by whether someone in the household is disabled, Scotland ", params$period)
+
+# Data ----
+
+dis <- filter(medianwealthdata, type == "dis") %>%
+  select(group, medtot, average, sample, tooltip) %>%
+  mutate(group = factor(group), 
+         group = fct_reorder(group, medtot)) 
+
+# Chart ----
+
+makemedianwealthchart(dis, nudgelabel = 6E4, nudgeaverage = 8E4)
+makeggiraph(p)
+
+```
+
+### Tenure
+
+```{r}
+
+# Titles ----
+
+title <- "Home owners have above average wealth, renters below."
+subtitle <- str_c("Median household wealth by housing tenure, Scotland ", params$period)
+
+# Data ----
+
+ten <- filter(medianwealthdata, type == "ten") %>%
+  select(group, medtot, average, sample, tooltip) %>%
+  mutate(group = factor(group), 
+         group = fct_reorder(group, medtot)) 
+
+# Chart ----
+
+makemedianwealthchart(ten, nudgelabel = 7E4, nudgeaverage = 2E4)
+makeggiraph(p)
+
+```
+
+### Qualification
+
+```{r}
+
+# Titles ----
+
+title <- "More highly qualified households have higher average wealth."
+subtitle <- str_c("Median household wealth by qualification of the household reference person, Scotland ", params$period)
+
+# Data ----
+
+edu <- filter(medianwealthdata, type == "edu") %>%
+  select(group, medtot, average, sample, tooltip) %>%
+  mutate(group = factor(group), 
+         group = fct_reorder(group, medtot)) 
+
+# Chart ----
+
+makemedianwealthchart(edu, nudgelabel = 8E4, nudgeaverage = 2E4)
+makeggiraph(p)
+
+```
+
+### Economic status
+
+```{r}
+
+# Titles ----
+
+title <- "Employed and retired households typically have above average wealth, whereas other inactive and unemployed households have below average wealth."
+subtitle <- str_c("Median household wealth by economic status of household reference person, Scotland ", params$period)
+
+# Data ----
+
+eco <- filter(medianwealthdata, type == "eco") %>%
+  select(group, medtot, average, sample, tooltip) %>%
+  mutate(group = factor(group), 
+         group = fct_reorder(group, medtot)) 
+
+# Chart ----
+
+makemedianwealthchart(eco, nudgelabel = 7E4, nudgeaverage = 2E4)
+makeggiraph(p)
+
+```
+
+### Table
+
+```{r}
+
+# Titles ----
+
+title <- str_c("Table 2.6 Median total household wealth by household type, Scotland ", params$period)
+
+footnotes <- c(params$source, "Marital status, age, qualification and economic status refer to the household reference person.", "Note that median wealth refers to that of the whole household; therefore, the more people live in the household, the larger their wealth")
+
+# Data ----
+
+tabledata <- allgroups %>%
+  select(type, group, medtot, sample) %>%
+  filter(type != "urb",
+         group != "All") %>%
+  mutate(type = factor(type, 
+                       levels = c("sex", "mar", "age", 
+                                  "dis", "ten", "edu", "eco" )),
+         medtot = comma(medtot, prefix = "£")) %>%
+  arrange(type, group) %>%
+  select(group, medtot)
+
+totalrow <- allgroups %>%
+  filter(type == "sex" ,
+         group == "All") %>%
+  mutate(medtot = comma(medtot, prefix = "£")) %>%
+  select(group, medtot)
+
+tabledata <- rbind(tabledata, totalrow)
+  
+# Table ----
+
+kable(tabledata, 
+      col.names = c("", "Median wealth"), 
+      caption = title,
+      align = c("l", "r", "r", "r", "r", "r", "r")) %>%
+  
+  kable_styling(bootstrap_options = c("striped", 
+                                      "hover", 
+                                      "responsive", 
+                                      "condensed"), 
+                full_width = F, 
+                position = "left") %>%
+  
+  pack_rows("Household type", 1, 9) %>%
+  pack_rows("Marital status", 10, 15) %>%
+  pack_rows("Age", 16, 21) %>%
+  pack_rows("Disability", 22, 23) %>%
+  pack_rows("Tenure", 24, 27) %>%
+  pack_rows("Qualification", 28, 30) %>%
+  pack_rows("Economic status", 31, 34) %>%
+  pack_rows("All households", 35, 35) %>%
+  footnote(alphabet = footnotes)
+
+```
+

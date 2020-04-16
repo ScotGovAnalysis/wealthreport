@@ -1,0 +1,969 @@
+# 5. Pension Wealth
+
+```{r, ch5_setup, include = FALSE}
+
+# Import SAS datasets ----
+
+medianpenpos <- read_sas("SAS datasets/medianpenpos.sas7bdat")
+inequType <- read_sas("SAS datasets/inequType.sas7bdat")
+participation <- read_sas("SAS datasets/participation.sas7bdat")
+allgroups <- read_sas("SAS datasets/allgroups.sas7bdat")
+havepenall <- read_sas("SAS datasets/havepenall.sas7bdat")
+
+# Set chart theme ----
+
+theme_set(mytheme)
+
+# Function for no wealth charts ----
+
+nopenwealthchart <- function(data, title, subtitle){
+  
+
+   p <- ggplot(data, aes(x = group,
+                         y = noPen,
+                         tooltip = tooltip,
+                         data_id = tooltip)) + 
+  
+  geom_bar_interactive(fill = params$cols_six[6],
+                       stat = "identity") +
+  
+  geom_hline(yintercept = data$average[1], 
+             alpha = 0.4, 
+             colour = params$cols_six[6], 
+             size = 2) +
+  
+  geom_label(aes(label = percent(noPen, 1)),
+             nudge_y = 0.06,
+             fill=NA,
+             alpha = 0.5,
+             colour = "grey20") +
+
+  geom_text(data = data[1, ],
+            aes(y = average,
+                label = percent(average,
+                                prefix = "Average: ", 1)),
+            nudge_y = 0.04,
+            nudge_x = -0.2,
+            hjust = 0,
+            colour = params$cols_six[6]) +
+    
+  scale_y_continuous(limits = c(0, 1.02), 
+                     labels = percent_format(accuracy = 1)) +
+    
+  coord_flip() + 
+    
+  addtitles() +
+    
+  theme(panel.grid.major.x = element_line(colour = "white"),
+      panel.grid.minor.x = element_line(colour = "white"), 
+      panel.grid.major.y = element_blank() ) 
+    
+ makeggiraph(p)
+
+}
+
+# Function: simplify ggiraph syntax ----
+
+makeggiraph <- function(p, width = 1, width_svg = 7){
+  
+  require("ggiraph")
+  
+  ggiraph({print(p)}, width = width, width_svg = width_svg)
+}
+
+# Function: add titles and source (caption) to charts ----
+
+addtitles <- function(t = title, 
+                      s = subtitle,
+                      c = params$source,
+                      twrap = titlewrap){
+  require("ggplot2")
+  
+  labs(title = str_wrap(t, twrap), 
+       subtitle = str_wrap(s, twrap*1.1), 
+       caption = c)  
+}
+```
+
+```{r, include=FALSE}
+
+
+data <- medianpenpos %>%
+  filter(Years == max(Years)) %>%
+  arrange(pendec)
+
+data <- data$median
+
+median <- comma(data[11], prefix = "£", accuracy = 100)
+median1 <- comma(data[1], prefix = "£", accuracy = 100)
+median10 <- comma(data[10], 
+                        prefix = "£", 
+                        scale = 1E-6, 
+                        suffix = " million", 
+                        accuracy = 1)
+
+data <- inequType %>%
+  filter(type == "pen") %>%
+  select(nowealth) %>%
+  mutate(penwealth = 1-nowealth,
+         penwealth = percent(penwealth, 1),
+         nowealth = percent(nowealth, 1)) 
+  
+nopenwealth <- data[[1]]
+penwealth <- data[[2]]
+
+```
+
+Private pension wealth is an estimate of the value of wealth held in private (non-state) pension schemes, expressed as an equivalent 'pot of money'. It comprises occupational and personal pensions and includes pensions of public sector workers. The estimate is based only on the pension rights accumulated to date and does not include rights which may be built up in future.
+
+The most common private pension schemes are:
+
+* occupational defined contribution pensions
+* personal pensions
+* occupational defined benefit pensions
+
+For the first two, benefits are determined by the contributions paid into the scheme, the investment return on those contributions and the type of annuity (if any) purchased upon retirement. For the last one, the benefits to be paid are salary related and based on number of years of pensionable service and accrual rate.
+
+More detail about how pension values are determined and current trends in pension schemes and distributions can be found in the Office for National Statistics' Pension Wealth in Great Britain publication^[Pension Wealth in Great Britain: [`r str_wrap("https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/incomeandwealth/bulletins/pensionwealthingreatbritain/april2016tomarch2018", 70)`
+](https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/incomeandwealth/bulletins/pensionwealthingreatbritain/april2016tomarch2018)].
+
+Wealth is generally accumulated over a person's lifetime, and this link between age and wealth is particularly relevant for pension wealth. Working-age adults generally increase their pension pots (active or preserved pensions^[Preserved pensions are private pensions that are no longer being contributed to but are not yet in payment.]), while pensioners have pensions in payment.
+
+The sections below consider the pension wealth distributions of households, individual adults who have some pension wealth, and the household types that are more or less likely to have any pension wealth. 
+
+## 5.1 Pension wealth distribution {.tabset .tabset-fade}
+
+`r penwealth` of households in Scotland had some private pension wealth in `r params$period`, and `r nopenwealth` had none. Of those households that did,  their pension wealth was on average `r median`. The bottom 10% households with pension wealth had on average `r median1`, and the top 10% households had more than `r median10` in pension wealth.
+
+Over time, average pension wealth steadily increased, except for the last period (`r params$period`), where the increase stalled or reversed for all but the households with the highest pensions wealth.
+
+### Pension wealth distribution
+
+```{r}
+
+# Titles ----
+
+title <- str_c('The wealthiest households had on average over ', median10, ' in pension wealth, whereas the least wealthy had ', median1)
+subtitle <- str_c("Median pension wealth by pension wealth decile (households with no pension wealth are excluded), Scotland ", params$period)
+titlewrap <- 68
+
+# Data ----
+
+data <- medianpenpos %>% 
+  filter(!is.na(pendec),
+         Years == params$period) %>%
+  mutate(pendec = factor(pendec),
+         tooltip = str_c("Median pension wealth for pension wealth decile ",
+                         pendec, 
+                         ": ", 
+                         comma(median, accuracy = 100, prefix = "£")))
+# Chart ----
+
+p <- ggplot(data, aes(x = pendec, 
+                 y = median,
+                 tooltip = stringi::stri_escape_unicode(tooltip),
+                 data_id = tooltip)) + 
+  
+  geom_bar_interactive(stat = 'identity',
+           fill = params$cols_six[6],
+           colour = "white") + 
+  
+  geom_label(data = data[10, ],
+             mapping = aes(x = pendec,
+                           y = median,
+                           label = comma(median, 
+                               accuracy = 0.01, 
+                               prefix = "£",
+                               scale = 1E-6,
+                               suffix = " million")) ,
+             nudge_y = 70000,
+             nudge_x = -0.25,
+             fill=NA, 
+             alpha = 0.5,
+             colour = "grey20") +
+  
+  geom_label(data = data[1, ],
+             mapping = aes(x = pendec,
+                           y = median,
+                           label = comma(median, 
+                               accuracy = 100, 
+                               prefix = "£")),
+             nudge_y = 70000,
+             fill=NA, 
+             alpha = 0.5,
+             colour = "grey20") +
+  
+  scale_fill_manual(values = params$cols_ts) +
+  
+  labs(x = "Pension wealth decile") +
+  addtitles() +
+  
+  scale_y_continuous(labels = comma_format(prefix = "£", 
+                                           accuracy = 100)) +
+  
+  theme(axis.title.x = element_text(hjust = 0.5, colour = "grey20"))
+
+makeggiraph(p)
+
+```
+
+### Over time
+
+```{r}
+
+# Titles ----
+
+title <- "Pension wealth increase stalling or reversing except for those with the most pension wealth"
+subtitle <- str_c("Median pension wealth by pension wealth decile (households with no pension wealth are excluded; all estimates in ", params$period, " prices), Scotland")
+titlewrap <- 68
+
+# Data -----
+
+data <- medianpenpos %>% 
+  filter(!is.na(pendec),
+         Years != "2014-2016 (w5)") %>%
+  mutate(pendec = factor(pendec),
+         tooltip = str_c(Years, 
+                         " median pension wealth for pension wealth decile ",
+                         pendec, 
+                         ": ", 
+                         comma(median, accuracy = 100, prefix = "£")))
+# Chart ----
+
+p <- ggplot(data, 
+            aes(x = pendec,
+                y = median, 
+                fill = Years, 
+                tooltip = stringi::stri_escape_unicode(tooltip),
+                data_id = tooltip)) + 
+  
+  geom_bar_interactive(position = 'dodge', 
+           stat = 'identity', 
+           colour = "white") +   
+  
+  scale_fill_manual(values = params$cols_ts) +
+  
+  labs(x = "Pension wealth decile") +
+  addtitles() +
+  
+  scale_y_continuous(limits = c(0, 1.25E6),
+                     labels = comma_format(prefix = "£",
+                                           accuracy = 100)) +
+  
+  theme(axis.title.x = element_text(hjust = 0.5, colour = "grey20"))
+
+makeggiraph(p)
+
+```
+
+### Table 
+
+```{r}
+
+# Title ----
+
+title <- "Table 5.1 Median pension wealth by pension wealth decile, Scotland"
+
+# Data ----
+
+data <- medianpenpos %>%
+  mutate(pendec = ifelse(is.na(pendec), "All", pendec)) %>%
+  remove_labels() %>%
+  filter(Years != "2014-2016 (w5)" ) %>%
+  mutate(pendec = factor(pendec, levels = params$decs),
+         median = comma(median, prefix = "£", accuracy = 100)) %>%
+    arrange(Years, pendec) %>%
+  spread(key = Years, value = median)
+
+# Table ----
+
+kable(data,
+      col.names = c("Pension wealth decile", params$years_rev[c(1:4,6:7)]),
+      caption = title,
+      align = c("l", "r", "r", "r", "r", "r", "r")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive", "condensed"),
+                full_width = F,
+                position = "left") %>%
+  footnote(alphabet = c(params$source, params$inflation, "Households with no pension wealth are excluded from this analysis.") )
+
+```
+
+## 5.2 Pension participation
+
+```{r, include = FALSE}
+
+data <- inequType %>%
+  filter(type == "pen") %>%
+    mutate(participation = percent(1-nowealth, 1))
+
+partlatest <- data$participation[1]
+
+```
+
+The proportion of Scottish households with some private pension wealth was `r partlatest` in `r params$period`. In many of these households, adults are continuing to add to their pension pots, while in other, generally older households, adults are already receiving private pension payments. Where someone has more than one private pension, it is also possible to have a pension in payment, and another one that is not in payment yet.
+
+To distinguish between these two types of pension wealth, the following sections separately look at pensions not yet in payment, and pensions that are in payment.
+
+Note that this section shows **individual adults** with private pensions, whereas the previous and the following sections are about **households** - the household pension wealth distribution, and the types of households that are more or less likely to have any pension wealth.
+
+### Saving for a pension  {.tabset .tabset-fade}
+
+```{r}
+
+data <- participation %>%
+  filter(type == "sav",
+         years == params$period,
+         agegroup == "All") %>%
+  mutate(rate = percent(rate, 1)) %>%
+  select(gender, rate)
+
+mrate <- data[data$gender == "Men", 2][[1]]
+frate <- data[data$gender == "Women", 2][[1]]
+
+```
+
+More men than women had a private pension that is not yet in payment (`r mrate` of men versus `r frate` of women), and this gap was caused by adults aged 55 and older.
+
+Over time, the proportion of adults with pension wealth (not yet in payment) has been increasing as more and more people are automatically enrolled into workplace pension schemes^[Under reforms brought in by the Pensions Act 2008, with updates in the Pensions Acts 2011 and 2014, automatic enrolment was introduced in October 2012 stating employers must enrol all eligible employees (who are not already participating in a qualifying workplace pension scheme) into a qualifying workplace private pension.
+Staged automatic enrolment is based on the size of the employer’s Pay As You Earn (PAYE) scheme and began in October 2012 with larger employers and completed in 2018. Workers can opt out but will be re-enrolled every three years.], and the gender gap has been closing.
+
+#### Saving for a pension
+
+```{r, warning=FALSE}
+
+# Titles ----
+
+title <- "Fewer older women than men are saving into a private pension"
+subtitle <- "Proportion of men and women who have pension wealth that is not yet in payment by age, Scotland"
+titlewrap <- 72
+
+# Data ----
+
+data <- participation %>%
+  arrange(years, type, gender, agegroup) %>%
+  mutate(agegroup = factor(agegroup),
+         tooltip = str_c(gender, ", ", 
+                         agegroup, " (", 
+                         years, "): ", 
+                         percent(rate, 1)),
+         fill = ifelse(agegroup == "All", 
+                       params$cols_six[5], 
+                       params$cols_six[6])) %>%
+  filter(type == "sav",
+         years == params$period)
+
+# Chart ----
+
+p <- ggplot(data, aes(x = agegroup,
+                 y = rate,
+                 fill = fill,
+                 label = percent(rate, 1),
+                 tooltip = tooltip,
+                 data_id = tooltip)) +
+  
+  geom_bar_interactive(colour = "white",
+           position = "dodge",
+           stat = "identity") +
+  
+  scale_fill_identity() +
+  
+  geom_text(aes(label = percent(rate, 1)),
+            nudge_y = -0.05,
+            colour = "white") +
+  
+  addtitles() +
+  
+  scale_y_continuous(labels = percent_format(accuracy = 1),
+                     limits = c(0, 1)) +
+
+  facet_wrap(~gender)
+
+makeggiraph(p)
+
+```
+
+#### Over time
+
+```{r}
+
+# Titles ----
+
+title <- "Fewer older women than men are saving into a private pension, but the gap is closing"
+subtitle <- "Proportion of men and women who have pension wealth that is not yet in payment by age, Scotland"
+titlewrap <- 72
+
+# Data ----
+
+data <- participation %>%
+  arrange(years, type, gender, agegroup) %>%
+  mutate(agegroup = factor(agegroup),
+         tooltip = str_c(gender, ", ", 
+                         agegroup, " (", 
+                         years, "): ", 
+                         percent(rate, 1)),
+         fill = ifelse(agegroup == "All", 
+                       params$cols_six[5], 
+                       params$cols_six[6])) %>%
+  filter(type == "sav")
+
+# Chart ----
+
+p <- ggplot(data, aes(x = agegroup,
+                 y = rate,
+                 fill = years,
+                 label = percent(rate, 1),
+                 tooltip = tooltip,
+                 data_id = tooltip)) +
+  
+  geom_bar_interactive(colour = "white",
+           position = "dodge",
+           stat = "identity") +
+  
+  scale_fill_manual(values = params$cols_ts) +
+  
+  addtitles() +
+  
+  scale_y_continuous(labels = percent_format(accuracy = 1),
+                     limits = c(0, 1)) +
+
+  facet_wrap(~gender)
+
+makeggiraph(p)
+ 
+```
+
+#### Table
+
+```{r}
+
+# Title ----
+
+title <- "Table 5.2 Proportion of men and women with pension wealth (not yet in payment) by age, Scotland"
+
+# Data ----
+
+data <- participation %>%
+  arrange(years, type, gender, agegroup) %>%
+  mutate(agegroup = factor(agegroup),
+         tooltip = str_c(gender, ", ", 
+                         agegroup, " (", 
+                         years, "): ", 
+                         percent(rate, 1)),
+         fill = ifelse(agegroup == "All", 
+                       params$cols_six[5], 
+                       params$cols_six[6])) %>%
+  filter(type == "sav")
+
+total <- group_by(data, years) %>%
+  filter(agegroup == "All") %>%
+  summarise(number = sum(number),
+            pop = sum(pop),
+            rate = number/pop,
+            gender = "All",
+            agegroup = "All") %>%
+            select(gender, agegroup, rate, years)
+
+data <- select(data, gender, agegroup, rate, years) %>%
+  rbind(total) %>%
+  mutate(gender = factor(gender, levels = c("Men", "Women", "All")),
+         rate = percent(rate, 1)) %>%
+  arrange(years, gender, agegroup) %>%
+  spread(years, rate) %>%
+  select(agegroup, params$years_rev[c(1,2,3,4,6,7)])
+
+# Table ----
+
+kable(data,
+      col.names = c("Age group", params$years_rev[c(1:4, 6:7)]),
+      caption = title,
+      align = c("l", "r", "r", "r", "r", "r", "r")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive", "condensed"),
+                full_width = F) %>%
+  pack_rows("Men", 1, 7) %>%
+  pack_rows("Women", 8, 14) %>%
+  pack_rows("All adults", 15, 15) %>%
+  footnote(alphabet = c(params$source) )
+
+```
+
+### Pensions in payment {.tabset .tabset-fade}
+
+```{r}
+
+data <- participation %>%
+  filter(type == "pay",
+         years == params$period,
+         agegroup == "65-74") %>%
+  mutate(rate = percent(rate, 1)) %>%
+  select(gender, rate)
+
+mrate <- data[data$gender == "Men", 2][[1]]
+frate <- data[data$gender == "Women", 2][[1]]
+
+```
+
+More older men than women had pensions in payment (for example, `r mrate` of men aged 65-74 versus `r frate` of women in the same age group). This gap, too, appears to be closing slowly.
+
+#### Pensions in payment
+
+```{r, warning = FALSE}
+
+# Titles ----
+
+title <- "Fewer older women than men have a private pension in payment"
+subtitle <- "Proportion of men and women who have a pension in payment by age, Scotland"
+titlewrap <- 72
+
+# Data ----
+
+data <- participation %>%
+  arrange(years, type, gender, agegroup) %>%
+  mutate(agegroup = factor(agegroup),
+         tooltip = str_c(gender, ", ", 
+                         agegroup, " (", 
+                         years, "): ", 
+                         percent(rate, 1)),
+         fill = ifelse(agegroup == "All", 
+                       params$cols_six[5], 
+                       params$cols_six[6])) %>%
+  filter(type == "pay",
+         years == params$period)
+
+# Chart ----
+
+p <- ggplot(data, aes(x = agegroup,
+                 y = rate,
+                 fill = fill,
+                 label = percent(rate, 1),
+                 tooltip = tooltip,
+                 data_id = tooltip)) +
+  
+  geom_bar_interactive(colour = "white",
+           position = "dodge",
+           stat = "identity") +
+  
+  scale_fill_identity() +
+  
+  geom_text(aes(label = percent(rate, 1)),
+            nudge_y = -0.05,
+            colour = "white") +
+  
+  addtitles() +
+  
+  scale_y_continuous(labels = percent_format(accuracy = 1),
+                     limits = c(0, 1)) +
+
+  facet_wrap(~gender)
+
+makeggiraph(p)
+ 
+```
+  
+#### Over time
+
+```{r}
+
+# Titles ----
+
+title <- "Fewer older women than men have a private pension in payment, but the gap is closing"
+subtitle <- "Proportion of men and women who have a pension in payment by age, Scotland"
+titlewrap <- 72
+
+# Data ----
+
+data <- participation %>%
+  arrange(years, type, gender, agegroup) %>%
+  mutate(agegroup = factor(agegroup),
+         tooltip = str_c(gender, ", ", 
+                         agegroup, " (", 
+                         years, "): ", 
+                         percent(rate, 1)),
+         fill = ifelse(agegroup == "All", 
+                       params$cols_six[5], 
+                       params$cols_six[6])) %>%
+  filter(type == "pay")
+
+# Chart ----
+
+p <- ggplot(data, aes(x = agegroup,
+                 y = rate,
+                 fill = years,
+                 label = percent(rate, 1),
+                 tooltip = tooltip,
+                 data_id = tooltip)) +
+  
+  geom_bar_interactive(colour = "white",
+           position = "dodge",
+           stat = "identity") +
+  
+  scale_fill_manual(values = params$cols_ts) +
+  
+  addtitles() +
+  
+  scale_y_continuous(labels = percent_format(accuracy = 1),
+                     limits = c(0, 1)) +
+
+  facet_grid(~gender)
+
+makeggiraph(p)
+ 
+```
+
+
+#### Table
+
+```{r}
+
+# Title ----
+
+title <- "Table 5.3 Proportion of men and women with a pension in payment by age, Scotland"
+
+# Data ----
+
+data <- participation %>%
+  arrange(years, type, gender, agegroup) %>%
+  mutate(agegroup = factor(agegroup),
+         tooltip = str_c(gender, ", ", 
+                         agegroup, " (", 
+                         years, "): ", 
+                         percent(rate, 1)),
+         fill = ifelse(agegroup == "All", 
+                       params$cols_six[5], 
+                       params$cols_six[6])) %>%
+  filter(type == "pay")
+
+total <- group_by(data, years) %>%
+  filter(agegroup == "All") %>%
+  summarise(number = sum(number),
+            pop = sum(pop),
+            rate = number/pop,
+            gender = "All",
+            agegroup = "All") %>%
+            select(gender, agegroup, rate, years)
+
+data <- select(data, gender, agegroup, rate, years) %>%
+  rbind(total) %>%
+  mutate(gender = factor(gender, levels = c("Men", "Women", "All")),
+         rate = percent(rate, 1)) %>%
+  arrange(years, gender, agegroup) %>%
+  spread(years, rate) %>%
+  select(agegroup, params$years_rev[c(1,2,3,4,6,7)])
+
+# Table ----
+
+kable(data,
+      col.names = c("Age group", params$years_rev[c(1:4, 6:7)]),
+      caption = title,
+      align = c("l", "r", "r", "r", "r", "r", "r")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive", "condensed"),
+                full_width = F) %>%
+  pack_rows("Men", 1, 7) %>%
+  pack_rows("Women", 8, 14) %>%
+  pack_rows("All adults", 15, 15) %>%
+  footnote(alphabet = c(params$source) )
+
+```
+
+## 5.3 Who has pension wealth? {.tabset .tabset-fade}
+
+Some characteristics of households who are more or less likely to have private pension wealth are shown in the charts below.
+
+For example, single adult households, in particular lone parents, are less likely to have any pension wealth compared to couples. Also, households in the social rented sector, or where the reference person has no (formal) qualification, or is unemployed or inactive (but not retired) are less likely to have any pension wealth, compared to home owners and households with an employed or highly qualified reference person.
+
+***
+
+**Note that small differences in these estimates may not be meaningful and should be interpreted with care. This is because the estimates are based on a sample survey and could be slightly higher or lower if we interviewed a different sample of the population.**
+
+
+### Household type
+
+```{r}
+
+# Titles ----
+
+title <- "Lone parents least likely to have any private pension wealth."
+subtitle <- str_c("Proportion of households with some private pension wealth by household type, Scotland ", params$period)
+titlewrap <- 63
+
+# Data ----
+
+alldata <- allgroups %>%
+  select(type, group, noPen, sample ) %>%
+  mutate(noPen = (1-noPen),
+         average = noPen[group == "All"][1]) %>%
+  filter(type != "urb",
+         sample >= 30,
+         group != "All",
+         group != "Other type" ) %>%
+  arrange(type, desc(noPen)) %>%
+  mutate(group = factor(group),
+         tooltip = str_c(group, 
+                         ": ", 
+                         percent(noPen, accuracy = 1)),
+         group = str_wrap(group, 25)) %>%
+  arrange(group)
+
+data <- filter(alldata, type == "sex") %>%
+  mutate(group = fct_reorder(group, noPen)) %>%
+  arrange(noPen)
+
+# Chart ----
+
+nopenwealthchart(data = data, title = title, subtitle = subtitle)
+
+```
+
+### Age
+
+```{r}
+
+# Titles ----
+
+title <- "Youngest and oldest households least likely to have any private pension wealth."
+subtitle <- str_c("Proportion of households with some private pension wealth by age of household reference person, Scotland ", params$period)
+titlewrap <- 68
+
+# Data ----
+
+data <- alldata %>% 
+  filter(type == "age") %>%
+  mutate(group = factor(group, levels = params$ages),
+         group = fct_rev(group)) %>%
+  arrange(group)
+
+# Chart ----
+
+nopenwealthchart(data = data, title = title, subtitle = subtitle)
+
+```
+
+### Marital status
+
+```{r}
+
+# Titles ----
+
+title <- "Single, separated and divorced people least likely to have any private pension wealth."
+subtitle <- str_c("Proportion of households with some private pension wealth by marital status, Scotland ", params$period)
+titlewrap <- 68
+
+# Data ----
+
+data <- filter(alldata, type == "mar")  %>%
+  mutate(group = fct_reorder(group, noPen)) %>%
+  arrange(noPen)
+
+# Chart ----
+
+nopenwealthchart(data = data, title = title, subtitle = subtitle)
+
+```
+
+### Economic status
+
+```{r}
+
+# Titles ----
+
+title <- "Inactive and unemployed households (except for retired) least likely to have any private pension wealth."
+subtitle <- str_c("Proportion of households with some private pension wealth by economic status of the household reference person, Scotland ", params$period)
+titlewrap <- 67
+
+# Data ----
+
+data <- filter(alldata, type == "eco") %>%
+  mutate(group = fct_reorder(group, noPen)) %>%
+  arrange(noPen)
+
+# Chart ----
+
+nopenwealthchart(data = data, title = title, subtitle = subtitle)
+
+```
+
+### Disability
+
+```{r}
+
+# Titles ----
+
+title <- "Households with disabled household members less likely to have any private pension wealth."
+subtitle <- str_c("Proportion of households with some private pension wealth by whether someone in the household is disabled, Scotland ", params$period)
+titlewrap <- 65
+
+# Data ----
+
+data <- filter(alldata, type == "dis") %>%
+  mutate(group = fct_reorder(group, noPen)) %>%
+  arrange(noPen)
+
+# Chart ----
+
+nopenwealthchart(data = data, title = title, subtitle = subtitle)
+
+```
+
+### Qualification
+
+```{r}
+
+# Titles ----
+
+title <- "Less qualified households less likely to have any private pension wealth."
+subtitle <- str_c("Proportion of households with some private pension wealth by qualification of the household reference person, Scotland ", params$period)
+titlewrap <- 64
+
+# Data ----
+
+data <- filter(alldata, type == "edu") %>%
+  mutate(group = fct_reorder(group, noPen)) %>%
+  arrange(noPen)
+
+# Chart ----
+
+nopenwealthchart(data = data, title = title, subtitle = subtitle)
+
+```
+
+### Tenure
+
+```{r}
+
+# Titles ----
+
+title <- "Renters less likely to have any private pension wealth."
+subtitle <- str_c("Proportion of households with some private pension wealth by housing tenure, Scotland ", params$period)
+titlewrap <- 68
+
+# Data ----
+
+data <- filter(alldata, type == "ten") %>%
+  mutate(group = fct_reorder(group, noPen)) %>%
+  arrange(noPen)
+
+# Chart ----
+
+nopenwealthchart(data = data, title = title, subtitle = subtitle)
+
+```
+
+### Over time
+
+```{r}
+
+# Titles ----
+
+title <- "More households have pension wealth"
+subtitle <- str_c("Proportion of households with some private pension wealth over time, Scotland")
+titlewrap <- 68
+
+# Data ----
+
+data <- havepenall %>%
+  mutate(tooltip = str_c("Households with pension wealth: ", percent(havePen, 1)),
+         years = ordered(years)) %>%
+  arrange(years)
+
+
+# Chart ----
+
+p <- ggplot(data, aes(x = years,
+                       y = havePen,
+                       size = years,
+                       tooltip = tooltip,
+                       data_id = tooltip) ) +
+  
+  geom_point_interactive(shape = 21,
+                         colour = params$cols_ts[6],
+                         aes(fill = years),
+                         show.legend = FALSE) + 
+  
+  scale_fill_manual(values = params$cols_ts) +
+  
+  scale_y_continuous(labels = percent_format(accuracy = 1), 
+                     limits = c(0, 1)) +
+  
+  addtitles()
+  
+makeggiraph(p)
+
+```
+
+### Tables
+
+```{r}
+
+# Title ----
+
+title <- str_c("Table 5.4 Proportion of households with some private pension wealth, Scotland ", params$period)
+
+# Data ----
+
+data <- allgroups %>%
+  select(type, group, noPen, sample) %>%
+  filter(type %in% c("sex", "mar", "age", "eco", "dis", "edu", "ten"),
+         sample >= 30) %>%
+  mutate(noPen = (1-noPen))
+
+totrow <- data %>%
+  filter(group == "All",
+         type == "eco") %>%
+  mutate(type = "all")
+
+data <- data %>%
+  filter(group != "All") %>%
+  rbind(totrow) %>%
+  mutate(noPen = percent(noPen, accuracy = 1),
+         type = factor(type, levels = c("sex", "mar", "age", "eco", "dis", "edu", "ten"))) %>%
+  arrange(type) %>%
+  select(group, noPen)
+
+# Table ----
+
+kable(data,
+      col.names = c("", "Proportion of households"),
+      caption = title,
+      align = c("l", "r", "r", "r", "r", "r", "r")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive", "condensed"),
+                full_width = F,
+                position = "left") %>%
+  pack_rows("Household type", 1, 9) %>%
+  pack_rows("Marital status", 10, 15) %>%
+  pack_rows("Age", 16, 21) %>%
+  pack_rows("Economic status", 22, 25) %>%
+  pack_rows("Disability", 26, 27) %>%
+  pack_rows("Qualification", 28, 30) %>%
+  pack_rows("Tenure", 31, 34) %>%
+  pack_rows("All households", 35, 35) %>%
+
+  footnote(alphabet = c(params$source, "Age, economic status and qualification refer to the household reference person." ))
+
+```
+
+```{r}
+
+# Title ----
+
+title <- "Table 5.5 Proportion of households with some private pension wealth over time, Scotland"
+
+# Data ----
+
+data <- havepenall %>%
+  mutate(tooltip = str_c("Households with pension wealth: ", percent(havePen, 1))) %>%
+  arrange(desc(years)) %>%
+  select(years, havePen) %>%
+  mutate(havePen = percent(havePen, 1))
+
+# Table ----
+
+kable(data,
+      col.names = c("Period", "Proportion of households"),
+      caption = title,
+      align = c("l", "r")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive", "condensed"), full_width = F, position = "left") %>% 
+  footnote(alphabet = c(params$source ))
+
+```
+
+
+

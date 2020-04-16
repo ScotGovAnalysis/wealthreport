@@ -22,8 +22,12 @@ params:
   # Colourbrewer 6-class BrBG and PuBuGn (for timeseries):
   cols_six: !r c('#8c510a','#d8b365','#f6e8c3',
                  '#c7eae5','#5ab4ac','#01665e')
-  cols_ts: !r c('#f6eff7','#d0d1e6','#a6bddb',
-                '#67a9cf','#1c9099','#016c59')
+  cols_ts: !r c("2006-2008" = '#f6eff7',
+                "2008-2010" = '#d0d1e6',
+                "2010-2012" = '#a6bddb',
+                "2012-2014" = '#67a9cf',
+                "2014-2016" = '#1c9099',
+                "2016-2018" = '#016c59')
   
   years: !r c("2016-2018", "2014-2016", "2014-2016 (w5)", "2012-2014",   
               "2010-2012", "2008-2010", "2006-2008")
@@ -107,3 +111,15 @@ theme_set(mytheme)
 ```
 ```{r child = "_chapter2.Rmd"}
 ```
+
+```{r child = "_chapter3.Rmd"}
+```
+```{r child = "_chapter4.Rmd"}
+```
+```{r child = "_chapter5.Rmd"}
+```
+```{r child = "_chapter6.Rmd"}
+```
+
+
+

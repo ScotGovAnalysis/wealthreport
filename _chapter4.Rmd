@@ -1,0 +1,474 @@
+# 4. Property Wealth
+
+```{r, ch4_setup, include = FALSE}
+
+# Import SAS datasets ----
+
+medianpropos <- read_sas("SAS datasets/medianpropos.sas7bdat")
+inequType <- read_sas("SAS datasets/inequType.sas7bdat")
+allgroups <- read_sas("SAS datasets/allgroups.sas7bdat")
+
+# Set chart theme ----
+
+theme_set(mytheme)
+
+# Function for no wealth charts ----
+
+noprowealthchart <- function(data, title, subtitle){
+  
+
+  p <- ggplot(data, aes(x = group,
+                        y = noPro,
+                        tooltip = tooltip,
+                        data_id = tooltip)) + 
+  
+  geom_bar_interactive(fill = params$cols_six[6],
+                       stat = "identity") +
+  
+  geom_hline(yintercept = data$average[1], 
+             alpha = 0.4, 
+             colour = params$cols_six[6], 
+             size = 2) +
+  
+  geom_label(aes(label = percent(noPro, 1)),
+             nudge_y = 0.06,
+             fill=NA,
+             alpha = 0.5,
+             colour = "grey20") +
+
+  geom_text(data = data[1, ],
+            aes(y = average,
+                label = percent(average,
+                                prefix = "Average: ", 1)),
+            nudge_y = 0.05,
+            nudge_x = -0.2,
+            hjust = 0,
+            colour = params$cols_six[6]) +
+    
+  scale_y_continuous(limits = c(0, 1.02), 
+                     labels = percent_format(accuracy = 1)) +
+    
+  coord_flip() + 
+    
+  addtitles() +
+    
+  theme(panel.grid.major.x = element_line(colour = "white"),
+      panel.grid.minor.x = element_line(colour = "white"), 
+      panel.grid.major.y = element_blank() ) 
+    
+makeggiraph(p)
+
+}
+
+
+# Function: simplify ggiraph syntax ----
+
+makeggiraph <- function(p, width = 1, width_svg = 7){
+  
+  require("ggiraph")
+  
+  ggiraph({print(p)}, width = width, width_svg = width_svg)
+}
+
+# Function: add titles and source (caption) to charts ----
+
+addtitles <- function(t = title, 
+                      s = subtitle,
+                      c = params$source,
+                      twrap = titlewrap){
+  require("ggplot2")
+  
+  labs(title = str_wrap(t, twrap), 
+       subtitle = str_wrap(s, twrap*1.1), 
+       caption = c)  
+}
+
+```
+
+```{r, include=FALSE}
+
+data <- medianpropos %>%
+  filter(Years == max(Years)) %>%
+  mutate(median = comma(median, accuracy = 100, prefix = "£")) %>%
+  arrange(prodec) 
+
+data <- data$median
+
+median <- data[11]
+median1 <- data[1]
+median10 <- data[10]
+
+data <- inequType %>%
+  filter(type == "pro") %>%
+  select(nowealth) %>%
+  mutate(prowealth = 1 - nowealth,
+         prowealth = percent(prowealth, 1),
+         nowealth = percent(nowealth, 1))
+
+noprowealth <- data[[1]]
+prowealth <- data[[2]]
+
+```
+
+Property wealth (net property wealth) is the value of all property owned (the main residence and any other property owned) less any debt on the property (e.g. mortgage) and equity release. It is derived from respondents' own valuations of their properties, rather than any survey valuation. If someone’s outstanding mortgage liabilities exceed the value of their property they are in property debt.
+
+## 4.1 Property wealth distribution {.tabset .tabset-fade}
+
+`r prowealth` of households in Scotland owned some property in `r params$period`, while `r noprowealth` had none. 
+
+Even so, property wealth is more equally distributed than financial and pension wealth, as shown in section [2.2 Wealth inequality by wealth type][2.2 Wealth inequality by wealth type].
+
+The average property wealth among property-owners was `r median`. A typical household in the top decile ( = 10% band) of the population that owned some property had on average `r median10` in property wealth, and one in the bottom decile had `r median1`. 
+
+In recent years, property wealth appears to be slowly increasing again for all but the wealthiest property owners, after a period of property wealth decline between 2006-2008 and 2012-2014.
+
+### Property wealth distribution
+
+```{r}
+
+# Titles ----
+
+title <- str_c('The wealthiest households had on average ', median10, ' in property wealth in ', params$period, ', whereas the least wealthy 10% had ', median1)
+subtitle <- str_c("Median net property wealth by property wealth decile (includes property owners only), Scotland ", params$period)
+titlewrap <- 68
+
+# Data ----
+
+data <- medianpropos %>% 
+  filter(!is.na(prodec),
+         Years == params$period) %>%
+  mutate(prodec = factor(prodec),
+         tooltip = str_c("Median property wealth for property wealth decile ",
+                         prodec, 
+                         ": " , 
+                         comma(median, accuracy = 100, prefix = "£")))
+# Chart ----
+
+p <- ggplot(data, aes(x = prodec, 
+                 y = median,
+                 tooltip = stringi::stri_escape_unicode(tooltip),
+                 data_id = tooltip)) + 
+  
+  geom_bar_interactive(stat = 'identity', 
+           colour = "white",
+           fill = params$cols_six[6]) +   
+  
+  geom_label(data = data[10, ],
+             mapping = aes(x = prodec,
+                           y = median,
+                           label = comma(median, accuracy = 100, prefix = "£")),
+             nudge_y = 30000, 
+             nudge_x = -0.1,
+             colour = "grey20", 
+             alpha = 0.5,
+             fill = NA) +
+  
+  geom_label(data = data[1, ],
+             mapping = aes(x = prodec,
+                           y = median,
+                           label = comma(median, accuracy = 100, prefix = "£")),
+             nudge_y = 30000, 
+             colour = "grey20", 
+             alpha = 0.5,
+             fill = NA) +
+  
+  labs(x = "Property wealth decile") +
+  
+  addtitles() +
+  
+  scale_y_continuous(labels = comma_format(prefix = "£", 
+                                           accuracy = 100)) +
+  
+  theme(axis.title.x = element_text(hjust = 0.5, colour = "grey20"))
+
+makeggiraph(p)
+
+```
+
+### Over time
+
+```{r}
+
+# Titles ----
+
+title <- "Property wealth decrease stalling except for the wealthiest"
+subtitle <- str_c("Median net property wealth by property wealth decile (includes property owners only; all estimates in ", params$period, " prices), Scotland")
+titlewrap <- 68
+
+# Data ----
+
+data <- medianpropos %>% 
+  filter(!is.na(prodec),
+         Years != "2014-2016 (w5)") %>%
+  mutate(prodec = factor(prodec),
+         tooltip = str_c(Years, 
+                         " median property wealth for property wealth decile ",
+                         prodec, 
+                         ": " , 
+                         comma(median, accuracy = 100, prefix = "£")))
+# Chart ----
+
+p <- ggplot(data, aes(prodec, 
+                 median, 
+                 fill = Years, 
+                 tooltip = stringi::stri_escape_unicode(tooltip),
+                 data_id = tooltip)) + 
+  
+  geom_bar_interactive(position = 'dodge', 
+           stat = 'identity', 
+           colour = "white") +   
+  
+  scale_fill_manual(values = params$cols_ts) +
+  
+  labs(x = "Property wealth decile") +
+  addtitles() +
+  
+  scale_y_continuous(labels = comma_format(prefix = "£", 
+                                           accuracy = 100)) +
+  
+  theme(axis.title.x = element_text(hjust = 0.5, colour = "grey20"))
+
+makeggiraph(p)
+
+```
+
+### Table 
+
+```{r}
+
+# Title ----
+
+title <- "Table 4.1 Median net property wealth by property wealth decile, Scotland"
+
+# Data ----
+
+data <- medianpropos %>% 
+  remove_labels() %>%
+  mutate(prodec = ifelse(is.na(prodec), "All", prodec),
+         prodec = factor(prodec, levels = params$decs),
+         median = comma(median, prefix = "£", accuracy = 100)) %>%
+  filter(Years != "2014-2016 (w5)") %>%
+    arrange(Years, prodec) %>%
+  spread(key = Years, value = median)
+
+# Table ----
+
+kable(data,
+      col.names = c("Property wealth decile", params$years_rev[c(1:4,6:7)]),
+      caption = title,
+      align = c("l", "r", "r", "r", "r", "r", "r")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive", "condensed"),
+                full_width = F) %>%
+  footnote(alphabet = c(params$source, params$inflation, "Only households with property are included in this analysis." ))
+```
+
+
+## 4.2 Who has property wealth? {.tabset .tabset-fade}
+
+A recent report commissioned by the Poverty and Inequality Commission Scotland showed that fewer households in Scotland are now able to own any property, and property wealth is getting concentrated in fewer and wealthier households^[Housing inequality report: [https://povertyinequality.scot/wp-content/uploads/2019/07/Poverty-and-inequality-housing-wealth-inequality-summary-report.pdf](https://povertyinequality.scot/wp-content/uploads/2019/07/Poverty-and-inequality-housing-wealth-inequality-summary-report.pdf)].
+
+Some characteristics of households that are more or less likely to have any property wealth are shown in the chart below. For example, single working-age adults, and in particular lone parents often don't have any property wealth, whereas pensioner couples often do. Households where the reference person is young, has no (formal) qualification, or is unemployed or inactive (but not retired) are also less likely to have any property wealth compared to older households, or households with a highly qualified, retired or employed household reference person.
+
+***
+
+**Note that small differences in these estimates may not be meaningful and should be interpreted with care. This is because the estimates are based on a sample survey and could be slightly higher or lower if we interviewed a different sample of the population.**
+
+### Household type
+
+```{r, noprosex}
+
+# Titles ----
+
+title <- "Lone parents least likely to own any property."
+subtitle <- str_c("Proportion of households who own property by household type, Scotland ", params$period)
+titlewrap <- 62
+
+# Data ----
+
+alldata <- allgroups %>%
+  select(type, group, noPro, sample ) %>%
+  mutate(noPro = (1-noPro),
+         average = noPro[group == "All"][1]) %>%
+  filter(type != "urb",
+         sample >= 30,
+         group != "All",
+         group != "Other type") %>%
+  arrange(type, desc(noPro)) %>%
+  mutate(group = factor(group),
+         group = fct_reorder(group, noPro),
+         tooltip = str_c(group, 
+                         ": ", 
+                         percent(noPro, accuracy = 1)),
+         group = str_wrap(group, 25)) 
+
+data <- filter(alldata, type == "sex") %>%
+  mutate(group = fct_reorder(group, noPro)) %>%
+  arrange(group)
+
+# Chart ----
+
+noprowealthchart(data = data, title = title, subtitle = subtitle)
+
+```
+
+### Age
+
+```{r}
+
+# Titles ----
+
+title <- "Youngest households least likely to own any property."
+subtitle <- str_c("Proportion of households who own property by household type, Scotland ", params$period)
+titlewrap <- 68
+  
+# Data ----
+
+data <- alldata %>% 
+  filter(type == "age") %>%
+  mutate(group = factor(group, levels = params$ages),
+         group = fct_rev(group)) %>%
+  arrange(desc(group))
+
+# Chart ----
+
+noprowealthchart(data = data, title = title, subtitle = subtitle)
+
+```
+
+### Marital status
+
+```{r}
+
+# Titles ----
+
+title <- "Divorced and single people least likely to own any property."
+subtitle <- str_c("Proportion of households who own property by marital status, Scotland ", params$period)
+titlewrap <- 68
+
+# Data ----
+
+data <- filter(alldata, type == "mar") %>%
+  mutate(group = fct_reorder(group, noPro)) %>%
+  arrange(group)
+
+# Chart ----
+
+noprowealthchart(data = data, title = title, subtitle = subtitle)
+
+```
+
+### Economic status
+
+```{r}
+
+# Titles ----
+
+title <- "Inactive and unemployed households (except for retired) least likely to own any property."
+subtitle <- str_c("Proportion of households who own property by economic status of the household reference person, Scotland ", params$period)
+titlewrap <- 67
+
+# Data ----
+
+data <- filter(alldata, type == "eco") %>%
+  mutate(group = fct_reorder(group, noPro)) %>%
+  arrange(group)
+
+# Chart ----
+
+noprowealthchart(data = data, title = title, subtitle = subtitle)
+
+```
+
+### Disability
+
+```{r}
+
+# Titles ----
+
+title <- "Households with disabled household members less likely to own any property."
+subtitle <- str_c("Proportion of households who own property by whether someone in the household is disabled, Scotland ", params$period)
+titlewrap <- 64
+
+# Data ----
+
+data <- filter(alldata, type == "dis") %>%
+  mutate(group = fct_reorder(group, noPro)) %>%
+  arrange(group)
+
+# Chart ----
+
+noprowealthchart(data = data, title = title, subtitle = subtitle)
+
+```
+
+### Qualification
+
+```{r}
+
+# Titles ----
+
+title <- "Less qualified households less likely to own any property."
+subtitle <- str_c("Proportion of households who own property by qualification of the household reference person, Scotland ", params$period)
+titlewrap <- 68
+
+# Data ----
+
+data <- filter(alldata, type == "edu") %>%
+  mutate(group = fct_reorder(group, noPro)) %>%
+  arrange(group)
+
+# Chart ----
+
+noprowealthchart(data = data, title = title, subtitle = subtitle)
+
+```
+
+
+### Tables
+
+```{r}
+
+# Title ----
+
+title <- str_c("Table 4.2 Proportion of households who own property, Scotland ", params$period)
+
+# Data ----
+
+data <- allgroups %>%
+  select(type, group, noPro, sample) %>%
+  filter(type %in% c("sex", "mar", "age", "eco", "dis", "edu"),
+         sample >= 30) %>%
+  mutate(noPro = (1-noPro))
+
+totrow <- data %>%
+  filter(group == "All",
+         type == "eco") %>%
+  mutate(type = "all")
+
+data <- data %>%
+  filter(group != "All") %>%
+  rbind(totrow) %>%
+  mutate(noPro = percent(noPro, accuracy = 1),
+         type = factor(type, levels = c("sex", "mar", "age", "eco", "dis", "edu"))) %>%
+  arrange(type) %>%
+  select(group, noPro)
+
+# Table ----
+
+kable(data,
+      col.names = c("", "Proportion of households"),
+      caption = title,
+      align = c("l", "r", "r", "r", "r", "r", "r")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive", "condensed"),
+                full_width = F,
+                position = "left") %>%
+  pack_rows("Household type", 1, 9) %>%
+  pack_rows("Marital status", 10, 15) %>%
+  pack_rows("Age", 16, 21) %>%
+  pack_rows("Economic status", 22, 25) %>%
+  pack_rows("Disability", 26, 27) %>%
+  pack_rows("Qualification", 28, 30) %>%
+  pack_rows("All households", 31, 31) %>%
+  footnote(alphabet = c(params$source, "Age, economic status and qualification refer to the household reference person." ))
+
+```
