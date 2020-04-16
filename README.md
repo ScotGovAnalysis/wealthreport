@@ -1,5 +1,7 @@
 # wealthreport
 
+[![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
+
 Contains the R Markdown code for the Wealth and Assets in Scotland 2006-2018 report at [http://www.wealthandassets.scot/2020report.html](http://www.wealthandassets.scot/2020report.html).
 
 Files:
